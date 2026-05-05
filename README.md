@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SF Apartment Finder — Web
 
-## Getting Started
+Frontend for the SF Apartment Finder. Reads from the same Postgres `listings` table populated by the indexer in [`elijahgjacob/apartment-finder`](https://github.com/elijahgjacob/apartment-finder).
 
-First, run the development server:
+## Setup
 
 ```bash
+cp .env.example .env.local
+# set POSTGRES_URL to the same connection string the indexer writes to
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deploy (Vercel)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+vercel
+vercel env add POSTGRES_URL production
+vercel --prod
+```
 
-## Learn More
+## Stack
 
-To learn more about Next.js, take a look at the following resources:
+- Next.js 16 (App Router, server components)
+- React 19
+- Tailwind CSS v4
+- `pg` for Postgres
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Scoring
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Each listing is scored 0–100 based on:
 
-## Deploy on Vercel
+- **Recency** (0–35): listed within 24h / 72h / 168h / older
+- **Price fit** (0–40): how far below the configured budget
+- **Distance to Caltrain** (0–25): via haversine from 4th & King
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Spam scoring lives in the indexer; this UI hides listings with `spam_score > 50` by default.
