@@ -1,32 +1,26 @@
 # SF Apartment Finder — Web
 
-Frontend for the SF Apartment Finder. Reads from the same Postgres `listings` table populated by the indexer in [`elijahgjacob/apartment-finder`](https://github.com/elijahgjacob/apartment-finder).
+Frontend for the SF Apartment Finder. Reads from a local SQLite `listings` table.
 
 ## Setup
 
 ```bash
-cp .env.example .env.local
-# set POSTGRES_URL to the same connection string the indexer writes to
-npm install
-npm run dev
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/seed.py      # populate sample data
+uvicorn app.main:app --reload
 ```
 
-Open http://localhost:3000.
-
-## Deploy (Vercel)
-
-```bash
-vercel
-vercel env add POSTGRES_URL production
-vercel --prod
-```
+Open http://localhost:8000.
 
 ## Stack
 
-- Next.js 16 (App Router, server components)
-- React 19
-- Tailwind CSS v4
-- `pg` for Postgres
+- Python 3.12+
+- FastAPI + Uvicorn
+- Jinja2 templates
+- SQLite (via stdlib `sqlite3`)
+- Tailwind CSS (CDN)
 
 ## Scoring
 
