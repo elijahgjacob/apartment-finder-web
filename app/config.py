@@ -22,7 +22,12 @@ SPAM_HIDE_THRESHOLD = int(os.environ.get("SPAM_HIDE_THRESHOLD", "50"))
 
 LISTING_SITES = os.environ.get(
     "LISTING_SITES",
-    "zillow.com,apartments.com,trulia.com,craigslist.org,hotpads.com,rent.com,redfin.com,realtor.com"
+    # Major aggregators
+    "zillow.com,apartments.com,trulia.com,craigslist.org,hotpads.com,rent.com,"
+    "redfin.com,realtor.com,padmapper.com,rentcafe.com,zumper.com,movoto.com,"
+    "rentberry.com,showcase.com,compass.com,rentsfnow.com,"
+    # Listing-adjacent
+    "homes.mercurynews.com,yelp.com"
 )
 
 GEO_COUNTRY = os.environ.get("GEO_COUNTRY", "us")
