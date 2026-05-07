@@ -14,7 +14,6 @@ import httpx
 
 from .config import CITY, CITY_SHORT, LISTING_SITES
 from .db import get_db
-from .geocode import geocode_address
 from .parallel_client import ParallelClient
 
 
@@ -165,14 +164,11 @@ def _save_listing(listing_data: dict) -> str | None:
     listing_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
+    # Note: do not geocode here. geocode_address contains a blocking
+    # time.sleep that would stall the event loop. Backfill runs after
+    # each search via _backfill_geocodes() under asyncio.to_thread.
     lat = listing_data.get("lat")
     lng = listing_data.get("lng")
-    if lat is None or lng is None:
-        geo_addr = listing_data.get("address") or listing_data.get("title") or ""
-        if geo_addr:
-            coords = geocode_address(geo_addr)
-            if coords:
-                lat, lng = coords
 
     db.execute(
         """INSERT OR REPLACE INTO listings
