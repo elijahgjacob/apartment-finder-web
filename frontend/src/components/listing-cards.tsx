@@ -68,9 +68,17 @@ export function ListingCards({ listings }: { listings: Listing[] }) {
                   {l.source}
                 </Badge>
               </div>
-              {l.phone && (
-                <div className="text-[11px] text-emerald-400/80 font-mono mt-0.5">
-                  {l.phone}
+              {(l.details?.available_date || l.details?.pet_policy || l.details?.lease_term) && (
+                <div className="text-[10px] text-muted-foreground font-mono mt-1 flex flex-wrap gap-x-2 gap-y-0.5">
+                  {l.details?.available_date && (
+                    <span>📅 {l.details.available_date}</span>
+                  )}
+                  {l.details?.lease_term && (
+                    <span>📜 {l.details.lease_term}</span>
+                  )}
+                  {l.details?.pet_policy && (
+                    <span>🐾 {l.details.pet_policy}</span>
+                  )}
                 </div>
               )}
             </div>

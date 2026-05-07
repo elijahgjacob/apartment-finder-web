@@ -1,3 +1,15 @@
+export type ListingDetails = {
+  available_date?: string | null
+  lease_term?: string | null
+  pet_policy?: string | null
+  is_furnished?: boolean | null
+  utilities_included?: string | null
+  amenities?: string | null
+  neighborhood_name?: string | null
+  parking_type?: string | null
+  laundry_type?: string | null
+}
+
 export type Listing = {
   id: string
   source: string
@@ -15,6 +27,7 @@ export type Listing = {
   has_laundry: boolean | null
   spam_score: number
   body: string | null
+  details?: ListingDetails
   phone?: string | null
   reasoning?: string
   score?: number

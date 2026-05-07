@@ -101,43 +101,13 @@ def _clean_extracted_address(raw: str) -> str:
     return cleaned.strip().rstrip(",").strip()
 
 
-def _extract_address(name: str, description: str) -> str | None:
-    address_patterns = [
-        r"located at\s+(.+?)(?:\.\s|\.\s*$|,\s*offers|,\s*is\s)",
-        r"(\d+\s+[\w.]+(?:\s+[\w.]+)?\s+(?:St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Rd|Road|Way|Ln|Lane|Pl|Place|Ct|Court)[\w.,\s]*?)(?:\.\s|\sis\s|,\s*(?:an|a|offers|is|has|which|in the))",
-    ]
-    for pat in address_patterns:
-        m = re.search(pat, description, re.IGNORECASE)
-        if m:
-            return _clean_extracted_address(m.group(1))
-
+def _address_from_name(name: str) -> str | None:
+    """Last-resort fallback: only used when the API didn't return a street_address.
+    Recognizes either a street-number address or a named-building pattern in the
+    candidate's name field. Pure post-filter, no description-prose mining."""
     if re.search(r"\d+\s+\w+\s+(St|Ave|Blvd|Dr|Rd|Way|Ln|Pl|Ct)", name):
         return _clean_extracted_address(name)
-
     return None
-
-
-def _extract_from_description(desc: str) -> dict:
-    result: dict = {}
-
-    m = re.search(r"(\d+(?:\.\d+)?)\s*-?\s*bath", desc, re.IGNORECASE)
-    if m:
-        result["bathrooms"] = float(m.group(1))
-
-    m = re.search(r"([\d,]+)\s*(?:sq\.?\s*ft|sqft|square\s*feet)", desc, re.IGNORECASE)
-    if m:
-        result["sqft"] = int(m.group(1).replace(",", ""))
-
-    m = re.search(r"\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}", desc)
-    if m:
-        result["phone"] = m.group(0)
-
-    if re.search(r"parking|garage", desc, re.IGNORECASE):
-        result["has_parking"] = True
-    if re.search(r"laundry|washer|dryer", desc, re.IGNORECASE):
-        result["has_laundry"] = True
-
-    return result
 
 
 def _normalize_address(addr: str) -> str:
@@ -174,8 +144,8 @@ def _save_listing(listing_data: dict) -> str | None:
         """INSERT OR REPLACE INTO listings
            (id, source, title, url, price, bedrooms, bathrooms, sqft,
             address, neighborhood, lat, lng, has_parking, has_laundry,
-            spam_score, spam_flags, phone, body, listed_at, fetched_at, is_active)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            spam_score, spam_flags, phone, body, details, listed_at, fetched_at, is_active)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             listing_id,
             listing_data.get("source", "web"),
@@ -195,6 +165,7 @@ def _save_listing(listing_data: dict) -> str | None:
             json.dumps(listing_data.get("spam_flags") or []),
             listing_data.get("phone"),
             listing_data.get("body"),
+            json.dumps(listing_data.get("details") or {}),
             now,
             now,
             1,
@@ -204,8 +175,47 @@ def _save_listing(listing_data: dict) -> str | None:
     return listing_id
 
 
+_NA_VALUES = {"", "N/A", "NA", "null", "None", "unknown", "Unknown", "-"}
+
+
+def _output_val(output: dict, key: str) -> str | None:
+    """Read either a match_condition value or an enrichment value by key."""
+    obj = output.get(key)
+    if not obj:
+        return None
+    v = obj.get("value")
+    if v is None:
+        return None
+    s = str(v).strip()
+    return s if s not in _NA_VALUES else None
+
+
+def _output_float(output: dict, key: str) -> float | None:
+    s = _output_val(output, key)
+    if not s:
+        return None
+    m = re.search(r"\d+(?:\.\d+)?", s)
+    return float(m.group(0)) if m else None
+
+
+def _output_bool(output: dict, key: str, true_words: tuple[str, ...] = ("yes", "true", "available", "allowed", "included")) -> bool | None:
+    s = _output_val(output, key)
+    if not s:
+        return None
+    sl = s.lower()
+    if any(w in sl for w in true_words):
+        return True
+    if any(w in sl for w in ("no", "none", "not", "false", "unavailable", "n/a")):
+        return False
+    return None
+
+
 def _candidate_to_listing(candidate: dict) -> dict | None:
-    """Convert a findall matched candidate to a listing dict."""
+    """Convert a FindAll matched candidate to a listing dict.
+
+    Structured fields come from the API's match_condition + enrichment
+    output. Regex is used only for post-filter defense (URL / address
+    sanity checks) — never to mine the description prose."""
     name = candidate.get("name", "")
     url = candidate.get("url", "")
     description = candidate.get("description", "")
@@ -214,6 +224,7 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
     if not url:
         return None
 
+    # Post-filter: URL points at an aggregate / category page, not a unit.
     search_page_patterns = [
         r"/apartments/$",
         r"/apartments-\d+-bedrooms/$",
@@ -226,6 +237,7 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
         if re.search(pat, url, re.IGNORECASE):
             return None
 
+    # Core fields — match_conditions return scalar-ish values.
     price = None
     beds = None
     for key, obj in output.items():
@@ -242,13 +254,13 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
     if beds is not None and (beds < 0 or beds > 10):
         beds = None
 
-    address = _extract_address(name, description)
-    if not address:
-        address = name
+    # Enrichments — let the API do the extraction work.
+    address = _output_val(output, "street_address") or _address_from_name(name) or name
 
     if not address or len(address) < 5:
         return None
 
+    # Post-filter: address looks like a non-address blurb.
     junk_patterns = [
         r"^(san francisco|sf|ca|california)(\s|,|$)",
         r"^[A-Z]{2}\s+\d{5}",
@@ -271,38 +283,59 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
     if not has_street_number and not is_named_building:
         return None
 
-    def _enrichment_val(key: str) -> str | None:
-        obj = output.get(key)
-        if obj and obj.get("type") == "enrichment":
-            v = obj.get("value", "")
-            return v if v and v != "N/A" and v != "NA" else None
-        return None
+    bathrooms = _output_float(output, "bathrooms")
+    sqft_str = _output_val(output, "square_feet")
+    sqft = int(re.sub(r"\D", "", sqft_str)) if sqft_str and re.search(r"\d", sqft_str) else None
+    if sqft is not None and (sqft < 100 or sqft > 10000):
+        sqft = None
 
-    phone = _enrichment_val("contact_phone")
-    email = _enrichment_val("contact_email")  # noqa: F841 — kept for future use
+    parking_type = _output_val(output, "parking_type")
+    laundry_type = _output_val(output, "laundry_type")
+    has_parking = _output_bool(output, "parking_type", true_words=("garage", "covered", "carport", "parking", "yes", "available", "included"))
+    if has_parking is None and parking_type:
+        has_parking = "no" not in parking_type.lower() and "none" not in parking_type.lower()
+    has_laundry = _output_bool(output, "laundry_type", true_words=("in-unit", "in unit", "washer", "dryer", "laundry", "yes", "shared"))
+    if has_laundry is None and laundry_type:
+        has_laundry = "no" not in laundry_type.lower() and "none" not in laundry_type.lower()
 
-    extras = _extract_from_description(description)
-    if not phone:
-        phone = extras.get("phone")
+    phone = _output_val(output, "contact_phone")
+    email = _output_val(output, "contact_email")
+
+    # Renter-facing details — stored as JSON, surfaced on the card.
+    details = {
+        "available_date": _output_val(output, "available_date"),
+        "lease_term": _output_val(output, "lease_term"),
+        "pet_policy": _output_val(output, "pet_policy"),
+        "is_furnished": _output_bool(output, "is_furnished"),
+        "utilities_included": _output_val(output, "utilities_included"),
+        "amenities": _output_val(output, "building_amenities"),
+        "neighborhood_name": _output_val(output, "neighborhood"),
+        "contact_email": email,
+        "parking_type": parking_type,
+        "laundry_type": laundry_type,
+    }
+    # Drop empty keys so the JSON stays small.
+    details = {k: v for k, v in details.items() if v not in (None, "", [], {})}
 
     return {
         "title": name,
         "address": address,
-        "neighborhood": None,
+        "neighborhood": details.get("neighborhood_name"),
         "price": price,
         "bedrooms": beds,
-        "bathrooms": extras.get("bathrooms"),
-        "sqft": extras.get("sqft"),
+        "bathrooms": bathrooms,
+        "sqft": sqft,
         "lat": None,
         "lng": None,
         "source": _detect_source(url),
         "url": url,
-        "has_parking": extras.get("has_parking", False),
-        "has_laundry": extras.get("has_laundry", False),
+        "has_parking": bool(has_parking) if has_parking is not None else False,
+        "has_laundry": bool(has_laundry) if has_laundry is not None else False,
         "spam_score": 0,
         "spam_flags": [],
         "phone": phone,
         "body": description,
+        "details": details,
     }
 
 
@@ -403,6 +436,42 @@ def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
     return conds
 
 
+def _enrichments() -> list[dict]:
+    """Fields a renter actually wants to know before contacting a landlord.
+    All extraction is done by the API; we read these values straight from
+    the candidate output — no regex on description prose."""
+    return [
+        {"name": "street_address",
+         "description": "The exact street address of the unit (e.g. '1234 Mission St #4'). Empty if only a neighborhood is given."},
+        {"name": "bathrooms",
+         "description": "Number of bathrooms in the unit, as a decimal (e.g. '1.5')."},
+        {"name": "square_feet",
+         "description": "Interior square footage of the unit, as an integer."},
+        {"name": "available_date",
+         "description": "Date the unit becomes available for move-in (ISO format YYYY-MM-DD if known, else a phrase like 'Available now')."},
+        {"name": "lease_term",
+         "description": "Length and type of lease (e.g. '12-month', 'month-to-month', '6-month minimum')."},
+        {"name": "pet_policy",
+         "description": "Whether pets are allowed and any restrictions (e.g. 'Cats OK, no dogs', 'No pets', 'Dogs under 25lb')."},
+        {"name": "is_furnished",
+         "description": "Whether the unit is furnished, partially furnished, or unfurnished."},
+        {"name": "utilities_included",
+         "description": "Which utilities are included in rent (e.g. 'Water, trash', 'All utilities included', 'None included')."},
+        {"name": "parking_type",
+         "description": "Parking situation (e.g. 'Garage included', '1 covered spot', 'Street only', 'No parking')."},
+        {"name": "laundry_type",
+         "description": "Laundry situation (e.g. 'In-unit washer/dryer', 'Shared on floor', 'Coin-op in basement', 'None')."},
+        {"name": "building_amenities",
+         "description": "Building-level amenities, comma-separated (e.g. 'Gym, rooftop, doorman, elevator')."},
+        {"name": "neighborhood",
+         "description": "Specific neighborhood name within the city (e.g. 'Mission', 'SoMa', 'Hayes Valley')."},
+        {"name": "contact_phone",
+         "description": "Phone number to inquire about the unit."},
+        {"name": "contact_email",
+         "description": "Email address to inquire about the unit."},
+    ]
+
+
 # ── Main task runner ─────────────────────────────────────────────────────
 
 async def run_task(task: Task) -> None:
@@ -436,12 +505,7 @@ async def run_task(task: Task) -> None:
                 objective=objective,
                 entity_type="apartment rental listings",
                 match_conditions=_match_conditions(task.min_beds, task.budget),
-                enrichments=[
-                    {"name": "contact_phone",
-                     "description": "Phone number to contact about renting this apartment."},
-                    {"name": "contact_email",
-                     "description": "Email address to contact about renting this apartment."},
-                ],
+                enrichments=_enrichments(),
                 generator="core",
                 match_limit=25,
             )

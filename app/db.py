@@ -38,11 +38,18 @@ def get_db() -> sqlite3.Connection:
             spam_flags    TEXT NOT NULL DEFAULT '[]',
             phone         TEXT,
             body          TEXT,
+            details       TEXT NOT NULL DEFAULT '{}',
             listed_at     TEXT NOT NULL DEFAULT (datetime('now')),
             fetched_at    TEXT NOT NULL DEFAULT (datetime('now')),
             is_active     INTEGER NOT NULL DEFAULT 1
         );
     """)
+
+    # Light migration: add details column to pre-existing tables.
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(listings)").fetchall()}
+    if "details" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN details TEXT NOT NULL DEFAULT '{}'")
+        conn.commit()
 
     _connection = conn
     return conn

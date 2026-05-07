@@ -36,6 +36,7 @@ class Listing:
     spam_flags: list[str]
     phone: str | None
     body: str | None
+    details: dict
     listed_at: datetime
     fetched_at: datetime
     score: int = 0
@@ -53,6 +54,12 @@ def _parse_dt(val: str | None) -> datetime:
 
 
 def _row_to_listing(r: Any) -> Listing:
+    keys = set(r.keys())
+    raw_details = r["details"] if "details" in keys else "{}"
+    try:
+        details = json.loads(raw_details or "{}")
+    except (TypeError, ValueError):
+        details = {}
     return Listing(
         id=r["id"],
         source=r["source"],
@@ -70,8 +77,9 @@ def _row_to_listing(r: Any) -> Listing:
         has_laundry=bool(r["has_laundry"]) if r["has_laundry"] is not None else None,
         spam_score=r["spam_score"],
         spam_flags=json.loads(r["spam_flags"] or "[]"),
-        phone=r["phone"] if "phone" in r.keys() else None,
+        phone=r["phone"] if "phone" in keys else None,
         body=r["body"],
+        details=details,
         listed_at=_parse_dt(r["listed_at"]),
         fetched_at=_parse_dt(r["fetched_at"]),
     )
@@ -134,7 +142,7 @@ def get_listings(budget: int = DEFAULT_BUDGET, show_spam: bool = False) -> list[
         """
         SELECT id, source, title, url, price, bedrooms, bathrooms, sqft,
                address, neighborhood, lat, lng, has_parking, has_laundry,
-               spam_score, spam_flags, phone, body, listed_at, fetched_at
+               spam_score, spam_flags, phone, body, details, listed_at, fetched_at
           FROM listings
          WHERE is_active = 1
            AND (? IS NULL OR price IS NULL OR price <= ?)

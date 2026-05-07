@@ -87,8 +87,11 @@ def require_internal_key(x_api_key: str | None = Header(default=None)):
 # ── Serialization ────────────────────────────────────────────────────────
 
 def _listing_to_dict(l: Listing) -> dict:
-    """Public listing payload. Phone is intentionally NOT exposed via the API
-    to avoid broadcasting scraped contact info. The DB still retains it."""
+    """Public listing payload. Phone + email are intentionally NOT exposed via
+    the API to avoid broadcasting scraped contact info. The DB still retains
+    them. Other renter-relevant facts (move-in date, pet policy, lease term,
+    etc.) come from `details`."""
+    safe_details = {k: v for k, v in (l.details or {}).items() if k not in ("contact_email",)}
     return {
         "id": l.id,
         "source": l.source,
@@ -106,6 +109,7 @@ def _listing_to_dict(l: Listing) -> dict:
         "has_laundry": l.has_laundry,
         "spam_score": l.spam_score,
         "body": l.body,
+        "details": safe_details,
         "score": l.score,
         "listed_at": l.listed_at.isoformat() if l.listed_at else None,
     }
