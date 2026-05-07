@@ -21,7 +21,8 @@ from .listings import get_listings, Listing
 from .tasks import create_task, get_task, run_task, stream_task
 
 
-_search_lock = asyncio.Lock()
+_bg_lock = asyncio.Lock()                       # protects bg loop from itself
+_current_user_task: asyncio.Task | None = None  # cancel-and-replace handle for user searches
 
 
 def _backfill_geocodes():
@@ -49,10 +50,10 @@ def _backfill_geocodes():
 async def _background_search_loop():
     await asyncio.sleep(2)
     while True:
-        if _search_lock.locked():
-            print("[bg] previous search still running — skipping this tick")
+        if _bg_lock.locked():
+            print("[bg] previous bg search still running — skipping this tick")
         else:
-            async with _search_lock:
+            async with _bg_lock:
                 try:
                     task = create_task(query=DEFAULT_QUERY, budget=DEFAULT_BUDGET)
                     await run_task(task)
@@ -151,15 +152,20 @@ class SearchRequest(BaseModel):
 
 @app.post("/api/tasks", dependencies=[Depends(require_internal_key)])
 async def create_search_task(body: SearchRequest):
-    if _search_lock.locked():
-        raise HTTPException(status_code=409, detail="a search is already running; try again shortly")
+    """Cancel-and-replace: typing a new query cancels the previous user search.
+    Independent of the background loop — both can run concurrently."""
+    global _current_user_task
+
+    prev = _current_user_task
+    if prev and not prev.done():
+        prev.cancel()
+        try:
+            await asyncio.wait_for(prev, timeout=2.0)
+        except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
+            pass
+
     task = create_task(query=body.query, budget=body.budget)
-
-    async def _guarded_run():
-        async with _search_lock:
-            await run_task(task)
-
-    asyncio.create_task(_guarded_run())
+    _current_user_task = asyncio.create_task(run_task(task))
     return JSONResponse({"task_id": task.id, "status": task.status.value})
 
 
