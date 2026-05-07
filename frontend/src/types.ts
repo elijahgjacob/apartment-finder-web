@@ -10,6 +10,17 @@ export type ListingDetails = {
   laundry_type?: string | null
 }
 
+export type MatchCondition = {
+  name: string
+  value: string
+  matched: boolean
+}
+
+export type Citation = {
+  title: string
+  url: string
+}
+
 export type Listing = {
   id: string
   source: string
@@ -31,6 +42,9 @@ export type Listing = {
   phone?: string | null
   reasoning?: string
   score?: number
+  // Streamed only (not persisted in DB)
+  match_basis?: MatchCondition[]
+  citations?: Citation[]
 }
 
 export type AppConfig = {

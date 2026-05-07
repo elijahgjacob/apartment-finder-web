@@ -317,6 +317,33 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
     # Drop empty keys so the JSON stays small.
     details = {k: v for k, v in details.items() if v not in (None, "", [], {})}
 
+    # Per-match-condition results (e.g. "in_target_city: San Francisco, CA, US ✓")
+    # Used for the demo's "why this match" panel; not persisted.
+    match_basis = []
+    for key, obj in output.items():
+        if obj.get("type") == "match_condition":
+            match_basis.append({
+                "name": key,
+                "value": obj.get("value", ""),
+                "matched": bool(obj.get("is_matched")),
+            })
+
+    # Top-level basis from FindAll: per-field reasoning + citations.
+    citations = []
+    for b in (candidate.get("basis") or []):
+        for c in (b.get("citations") or []):
+            url_c = c.get("url") or ""
+            title = c.get("title") or url_c
+            if url_c:
+                citations.append({"title": title[:120], "url": url_c})
+    # Dedup citations
+    seen_cites = set()
+    unique_citations = []
+    for c in citations:
+        if c["url"] not in seen_cites:
+            seen_cites.add(c["url"])
+            unique_citations.append(c)
+
     return {
         "title": name,
         "address": address,
@@ -336,6 +363,9 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
         "phone": phone,
         "body": description,
         "details": details,
+        # Demo-only — not persisted, only shipped via SSE listing event
+        "match_basis": match_basis,
+        "citations": unique_citations[:5],
     }
 
 
