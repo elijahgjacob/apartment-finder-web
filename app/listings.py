@@ -6,12 +6,14 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from .config import (
+    REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
+    DEFAULT_BUDGET, SPAM_HIDE_THRESHOLD,
+)
 from .db import get_db
 
-SEARCH_LAT = 37.7764
-SEARCH_LNG = -122.3973
-DEFAULT_BUDGET = 7500
-SPAM_HIDE_THRESHOLD = 50
+SEARCH_LAT = REFERENCE_POINT_LAT
+SEARCH_LNG = REFERENCE_POINT_LNG
 
 
 @dataclass
@@ -32,6 +34,7 @@ class Listing:
     has_laundry: bool | None
     spam_score: int
     spam_flags: list[str]
+    phone: str | None
     body: str | None
     listed_at: datetime
     fetched_at: datetime
@@ -67,6 +70,7 @@ def _row_to_listing(r: Any) -> Listing:
         has_laundry=bool(r["has_laundry"]) if r["has_laundry"] is not None else None,
         spam_score=r["spam_score"],
         spam_flags=json.loads(r["spam_flags"] or "[]"),
+        phone=r["phone"] if "phone" in r.keys() else None,
         body=r["body"],
         listed_at=_parse_dt(r["listed_at"]),
         fetched_at=_parse_dt(r["fetched_at"]),
@@ -130,7 +134,7 @@ def get_listings(budget: int = DEFAULT_BUDGET, show_spam: bool = False) -> list[
         """
         SELECT id, source, title, url, price, bedrooms, bathrooms, sqft,
                address, neighborhood, lat, lng, has_parking, has_laundry,
-               spam_score, spam_flags, body, listed_at, fetched_at
+               spam_score, spam_flags, phone, body, listed_at, fetched_at
           FROM listings
          WHERE is_active = 1
            AND (? IS NULL OR price IS NULL OR price <= ?)
@@ -174,5 +178,6 @@ def search_url(listing: Listing) -> str:
     if listing.url:
         return listing.url
     import urllib.parse
-    q = urllib.parse.quote(f"{listing.address or listing.title or ''} rent San Francisco")
+    from .config import CITY_SHORT
+    q = urllib.parse.quote(f"{listing.address or listing.title or ''} rent {CITY_SHORT}")
     return f"https://www.google.com/search?q={q}"

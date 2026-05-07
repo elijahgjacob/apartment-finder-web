@@ -36,6 +36,7 @@ def get_db() -> sqlite3.Connection:
             has_laundry   INTEGER,
             spam_score    INTEGER NOT NULL DEFAULT 0,
             spam_flags    TEXT NOT NULL DEFAULT '[]',
+            phone         TEXT,
             body          TEXT,
             listed_at     TEXT NOT NULL DEFAULT (datetime('now')),
             fetched_at    TEXT NOT NULL DEFAULT (datetime('now')),
