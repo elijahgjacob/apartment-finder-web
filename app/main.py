@@ -138,6 +138,7 @@ def _listing_to_dict(l: Listing) -> dict:
         "details": safe_details,
         "score": l.score,
         "listed_at": l.listed_at.isoformat() if l.listed_at else None,
+        "fetched_at": l.fetched_at.isoformat() if l.fetched_at else None,
     }
 
 

@@ -233,29 +233,35 @@ function scorePalette(score: number | null | undefined) {
 }
 
 function ListingCard({
-  l, idx, city, isNew, isHovered, onHover, onLeave,
+  l, idx, city, isSessionNew, isFresh, isHovered, onHover, onLeave,
 }: {
-  l: Listing; idx: number; city: string; isNew: boolean
+  l: Listing; idx: number; city: string
+  isSessionNew: boolean   // arrived in current SSE stream — strongest visual
+  isFresh: boolean        // appeared in DB after lastSeenAt — secondary visual
   isHovered?: boolean
   onHover?: () => void
   onLeave?: () => void
 }) {
   const href = l.url ?? `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
   const scoreP = scorePalette(l.score)
+  const viaMonitor = l.details?.via_monitor === true
+  const newish = isSessionNew || isFresh
   return (
     <article
       data-listing-id={l.id}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className={`group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 ${isNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
+      className={`group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 ${isSessionNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${isNew || isHovered ? Z.blueBorder : Z.border}`,
-        boxShadow: isNew
+        border: `1px solid ${newish || isHovered ? Z.blueBorder : Z.border}`,
+        boxShadow: isSessionNew
           ? `0 0 0 4px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
-          : isHovered
-            ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
-            : `0 1px 2px rgba(15,17,21,0.04)`,
+          : isFresh
+            ? `0 0 0 2px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
+            : isHovered
+              ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
+              : `0 1px 2px rgba(15,17,21,0.04)`,
         // Subtle accent stripe on the leading edge based on score
         borderLeft: `3px solid ${scoreP.border}`,
       }}
@@ -289,12 +295,31 @@ function ListingCard({
             {l.score}/100
           </span>
         )}
-        {isNew && (
+        {isSessionNew && (
           <span
             className="text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-[0.08em] animate-pulse"
             style={{ backgroundColor: Z.blue, color: "white" }}
+            title="Just arrived in this search"
           >
             new
+          </span>
+        )}
+        {!isSessionNew && isFresh && (
+          <span
+            className="text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-[0.08em]"
+            style={{ backgroundColor: Z.blueSoft, color: Z.blueDark, border: `1px solid ${Z.blueBorder}` }}
+            title={l.fetched_at ? `Discovered ${relativeTime(l.fetched_at)}` : "New since your last visit"}
+          >
+            new since last visit
+          </span>
+        )}
+        {viaMonitor && (
+          <span
+            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em] inline-flex items-center gap-1"
+            style={{ backgroundColor: "#FFF", color: Z.blueDark, border: `1px dashed ${Z.blueBorder}` }}
+            title="Discovered automatically by the always-on Parallel Monitor"
+          >
+            <span style={{ fontSize: "8px" }}>●</span> via monitor
           </span>
         )}
       </div>
@@ -889,6 +914,23 @@ export default function Demo() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
   const cardListRef = useRef<HTMLDivElement | null>(null)
+
+  // 'New since your last visit' tracking. lastSeenAt persists in
+  // localStorage; on first ever visit we initialize to (now - 24h)
+  // so the most recent day's finds get the NEW treatment.
+  const [lastSeenAt, setLastSeenAt] = useState<number>(() => {
+    const stored = window.localStorage.getItem("zillow-demo-lastSeenAt")
+    if (stored) {
+      const n = parseInt(stored, 10)
+      if (Number.isFinite(n)) return n
+    }
+    return Date.now() - 24 * 3600 * 1000
+  })
+  const markAllSeen = useCallback(() => {
+    const now = Date.now()
+    setLastSeenAt(now)
+    window.localStorage.setItem("zillow-demo-lastSeenAt", String(now))
+  }, [])
   const handleMarkerClick = useCallback((id: string) => {
     setHoveredId(id)
     const el = cardListRef.current?.querySelector(`[data-listing-id="${id}"]`)
@@ -1065,6 +1107,17 @@ export default function Demo() {
     [sortedListings, showAllScores],
   )
   const hiddenCount = sortedListings.length - visibleListings.length
+
+  // ── New-since-last-visit derivations ──
+  const isNewSinceLastVisit = useCallback((l: Listing) => {
+    const t = l.fetched_at ? new Date(l.fetched_at).getTime() : 0
+    return t > lastSeenAt
+  }, [lastSeenAt])
+
+  const newSinceLastVisitCount = useMemo(
+    () => visibleListings.filter(isNewSinceLastVisit).length,
+    [visibleListings, isNewSinceLastVisit],
+  )
 
   // Realism check is only meaningful when the user EXPLICITLY typed a budget
   // (not when we're falling back to a default). Otherwise we'd nag every
@@ -1284,6 +1337,29 @@ export default function Demo() {
 
         {(streaming || reasoning || listings.length > 0) ? (
           <>
+            {newSinceLastVisitCount > 0 && (
+              <div
+                className="mb-4 rounded-2xl px-4 py-3 flex items-center gap-3"
+                style={{ backgroundColor: Z.blueSoft, border: `1px solid ${Z.blueBorder}` }}
+              >
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: Z.blue }} />
+                </span>
+                <span className="text-sm flex-1" style={{ color: Z.blueDarker }}>
+                  <strong style={{ fontFamily: FONT_HEADING }}>{newSinceLastVisitCount}</strong> new {newSinceLastVisitCount === 1 ? "listing" : "listings"} since your last visit
+                </span>
+                <button
+                  type="button"
+                  onClick={markAllSeen}
+                  className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:bg-white"
+                  style={{ color: Z.blueDark, border: `1px solid ${Z.blueBorder}`, fontFamily: FONT_HEADING, backgroundColor: "white" }}
+                >
+                  Mark all seen
+                </button>
+              </div>
+            )}
+
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
                 <StatsBar listings={visibleListings} newCount={newIds.size} monitoring={!!monitor?.active} />
@@ -1299,7 +1375,8 @@ export default function Demo() {
                   {visibleListings.map((l, i) => (
                     <ListingCard
                       key={l.id} l={l} idx={i} city={city}
-                      isNew={newIds.has(l.id)}
+                      isSessionNew={newIds.has(l.id)}
+                      isFresh={!newIds.has(l.id) && isNewSinceLastVisit(l)}
                       isHovered={hoveredId === l.id}
                       onHover={() => setHoveredId(l.id)}
                       onLeave={() => setHoveredId(null)}

@@ -8,6 +8,9 @@ export type ListingDetails = {
   neighborhood_name?: string | null
   parking_type?: string | null
   laundry_type?: string | null
+  via_monitor?: boolean | null
+  monitor_event_date?: string | null
+  monitor_summary?: string | null
 }
 
 export type MatchCondition = {
@@ -42,6 +45,8 @@ export type Listing = {
   phone?: string | null
   reasoning?: string
   score?: number
+  listed_at?: string | null
+  fetched_at?: string | null
   // Streamed only (not persisted in DB)
   match_basis?: MatchCondition[]
   citations?: Citation[]
