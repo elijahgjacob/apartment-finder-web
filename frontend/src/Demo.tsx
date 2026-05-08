@@ -313,11 +313,220 @@ function Stat({ label, value, accent, color }: { label: string; value: string; a
   )
 }
 
+type StepStatus = "pending" | "active" | "done" | "error"
+
+type ProcessStep = {
+  id: string
+  title: string
+  subtitle?: string
+  detail?: string
+  status: StepStatus
+  progress?: { matched: number; total: number }
+}
+
+function parseReasoningToSteps(text: string, streaming: boolean, done: boolean): ProcessStep[] {
+  const steps: ProcessStep[] = [
+    { id: "understand", title: "Understanding your search", status: "pending" },
+    { id: "discover", title: "Discovering rental listings", status: "pending" },
+    { id: "verify", title: "Verifying matches", status: "pending" },
+    { id: "enrich", title: "Extracting structured details", status: "pending" },
+    { id: "quality", title: "Spam & quality check", status: "pending" },
+    { id: "ready", title: "Ready", status: "pending" },
+  ]
+
+  // 1. Understanding — completed once we've parsed the objective
+  const objMatch = text.match(/Objective:\s*([^\n]+)/)
+  if (objMatch) {
+    steps[0].status = "done"
+    steps[0].subtitle = objMatch[1].trim()
+  }
+  const budgetMatch = text.match(/Budget:\s*\$([\d,]+)/)
+  const bedsMatch = text.match(/(\d+)\+\s*beds/)
+  if (steps[0].subtitle && (budgetMatch || bedsMatch)) {
+    const parts: string[] = []
+    if (bedsMatch) parts.push(`${bedsMatch[1]}+ beds`)
+    if (budgetMatch) parts.push(`under $${budgetMatch[1]}`)
+    steps[0].detail = parts.join(" · ")
+  }
+
+  // 2. Discovery — active once "Starting entity discovery" appears
+  if (/Starting entity discovery/.test(text)) steps[1].status = "active"
+
+  // 3. Verify — pulls live progress numbers (X candidates, Y verified)
+  const progressMatches = [...text.matchAll(/Progress:\s*(\d+)\s*candidates,\s*(\d+)\s*verified/g)]
+  if (progressMatches.length > 0) {
+    steps[1].status = "done"
+    steps[2].status = "active"
+    const last = progressMatches[progressMatches.length - 1]
+    const candidates = parseInt(last[1])
+    const verified = parseInt(last[2])
+    steps[2].progress = { matched: verified, total: candidates }
+    steps[2].subtitle = `${verified} verified · ${candidates} candidates checked`
+  }
+
+  // Discovery officially done
+  if (/Discovery done/.test(text)) {
+    steps[1].status = "done"
+    steps[2].status = "done"
+    const m = text.match(/Discovery done:\s*(\d+)\s*verified/)
+    if (m) steps[2].subtitle = `${m[1]} verified across the web`
+  }
+
+  // 4. Enrichment — when "Parsing N matches" appears
+  const parsingMatch = text.match(/Parsing\s*(\d+)\s*matches/)
+  if (parsingMatch) {
+    steps[3].status = "active"
+    steps[3].subtitle = `Pulling structured fields from ${parsingMatch[1]} listing pages`
+  }
+
+  // 5. Spam scoring
+  const spamMatch = text.match(/Spam-scoring\s*(\d+)/)
+  if (spamMatch) {
+    steps[3].status = "done"
+    steps[4].status = "active"
+    steps[4].subtitle = `Classifying ${spamMatch[1]} untrusted-source listings`
+  }
+
+  // 6. Final
+  const savedMatch = text.match(/Done\.\s*(\d+)\s*listings saved/)
+  if (savedMatch) {
+    for (let i = 0; i < 5; i++) if (steps[i].status !== "error") steps[i].status = "done"
+    steps[5].status = "done"
+    steps[5].subtitle = `${savedMatch[1]} listings ready for review`
+  } else if (done) {
+    for (const s of steps) if (s.status === "pending" || s.status === "active") s.status = "done"
+    steps[5].status = "done"
+  }
+
+  // If we have an error in text
+  if (/error|failed/i.test(text) && !done && !streaming) {
+    for (const s of steps) if (s.status === "active") s.status = "error"
+  }
+
+  return steps
+}
+
+function StepDot({ status, streaming }: { status: StepStatus; streaming: boolean }) {
+  if (status === "done") {
+    return (
+      <div
+        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: Z.blue }}
+      >
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      </div>
+    )
+  }
+  if (status === "active") {
+    return (
+      <div className="relative w-5 h-5 shrink-0 flex items-center justify-center">
+        {streaming && (
+          <span className="absolute inset-0 rounded-full animate-ping opacity-60" style={{ backgroundColor: Z.blue }} />
+        )}
+        <span
+          className="relative w-5 h-5 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: "white", border: `2px solid ${Z.blue}` }}
+        >
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: Z.blue }} />
+        </span>
+      </div>
+    )
+  }
+  if (status === "error") {
+    return (
+      <div
+        className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+        style={{ backgroundColor: Z.red }}
+      >
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5" strokeLinecap="round">
+          <line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      </div>
+    )
+  }
+  // pending
+  return (
+    <div
+      className="w-5 h-5 rounded-full shrink-0"
+      style={{ backgroundColor: Z.bgPage, border: `2px solid ${Z.border}` }}
+    />
+  )
+}
+
+function ProgressMeter({ matched, total }: { matched: number; total: number }) {
+  const pct = total > 0 ? Math.min(100, (matched / total) * 100) : 0
+  return (
+    <div className="mt-2">
+      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: Z.bgPage }}>
+        <div
+          className="h-full transition-all duration-500 ease-out"
+          style={{ width: `${pct}%`, backgroundColor: Z.blue }}
+        />
+      </div>
+    </div>
+  )
+}
+
+function ProcessTimeline({ steps, streaming }: { steps: ProcessStep[]; streaming: boolean }) {
+  return (
+    <ol className="px-5 py-5 space-y-1">
+      {steps.map((s, i) => {
+        const isLast = i === steps.length - 1
+        const titleColor =
+          s.status === "done" ? Z.text :
+          s.status === "active" ? Z.text :
+          s.status === "error" ? Z.red : Z.textFaint
+        const lineColor = s.status === "done" ? Z.blue : Z.border
+        return (
+          <li key={s.id} className="flex gap-3">
+            <div className="flex flex-col items-center pt-0.5">
+              <StepDot status={s.status} streaming={streaming} />
+              {!isLast && (
+                <div
+                  className="w-px flex-1 mt-1 mb-1 transition-colors duration-300"
+                  style={{ backgroundColor: lineColor, minHeight: 18 }}
+                />
+              )}
+            </div>
+            <div className={`flex-1 pb-${isLast ? 0 : 3}`}>
+              <div
+                className="text-[13px] font-semibold leading-snug"
+                style={{ color: titleColor, fontFamily: FONT_HEADING }}
+              >
+                {s.title}
+              </div>
+              {s.subtitle && (
+                <div className="text-[12px] mt-0.5 leading-relaxed" style={{ color: Z.textMid }}>
+                  {s.subtitle}
+                </div>
+              )}
+              {s.detail && (
+                <div className="text-[11px] mt-0.5 italic" style={{ color: Z.textFaint }}>
+                  "{s.detail}"
+                </div>
+              )}
+              {s.progress && s.status === "active" && (
+                <ProgressMeter matched={s.progress.matched} total={s.progress.total} />
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 function ReasoningPanel({ reasoning, streaming, done }: { reasoning: string; streaming: boolean; done: boolean }) {
-  const ref = useRef<HTMLDivElement | null>(null)
+  const [showRaw, setShowRaw] = useState(false)
+  const rawRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight
-  }, [reasoning])
+    if (rawRef.current) rawRef.current.scrollTop = rawRef.current.scrollHeight
+  }, [reasoning, showRaw])
+
+  const steps = useMemo(() => parseReasoningToSteps(reasoning, streaming, done), [reasoning, streaming, done])
+  const hasActivity = streaming || reasoning.length > 0 || done
 
   return (
     <aside
@@ -340,7 +549,7 @@ function ReasoningPanel({ reasoning, streaming, done }: { reasoning: string; str
               AI Assistant
             </div>
             <div className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: Z.textFaint }}>
-              Reasoning
+              Process
             </div>
           </div>
         </div>
@@ -350,22 +559,45 @@ function ReasoningPanel({ reasoning, streaming, done }: { reasoning: string; str
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
               <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: Z.blue }} />
             </span>
-            live
+            running
           </span>
         )}
         {!streaming && done && (
           <span className="text-[11px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: Z.greenSoft, color: Z.green }}>
-            done
+            complete
           </span>
         )}
       </header>
-      <div
-        ref={ref}
-        className="text-[13px] whitespace-pre-wrap max-h-[640px] overflow-y-auto leading-relaxed px-5 py-4"
-        style={{ color: Z.textSoft, fontFamily: FONT_MONO }}
-      >
-        {reasoning || (streaming ? "Connecting to assistant…" : "The assistant's step-by-step reasoning will appear here.")}
-      </div>
+
+      {hasActivity ? (
+        <ProcessTimeline steps={steps} streaming={streaming} />
+      ) : (
+        <div className="px-5 py-8 text-[13px] text-center" style={{ color: Z.textFaint }}>
+          The assistant's process will appear here when you run a search.
+        </div>
+      )}
+
+      {hasActivity && reasoning.length > 0 && (
+        <div className="border-t" style={{ borderColor: Z.borderSoft }}>
+          <button
+            type="button"
+            onClick={() => setShowRaw((v) => !v)}
+            className="w-full px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-left transition-colors hover:bg-gray-50"
+            style={{ color: Z.textFaint }}
+          >
+            {showRaw ? "▾ Hide raw log" : "▸ Show raw log"}
+          </button>
+          {showRaw && (
+            <div
+              ref={rawRef}
+              className="text-[12px] whitespace-pre-wrap max-h-[280px] overflow-y-auto leading-relaxed px-5 pb-4 border-t"
+              style={{ color: Z.textSoft, fontFamily: FONT_MONO, borderColor: Z.borderSoft }}
+            >
+              {reasoning}
+            </div>
+          )}
+        </div>
+      )}
     </aside>
   )
 }
@@ -473,12 +705,46 @@ export default function Demo() {
 
   const [view, setView] = useState<"split" | "list" | "map">("split")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [hydrated, setHydrated] = useState(false)
   const cardListRef = useRef<HTMLDivElement | null>(null)
   const handleMarkerClick = useCallback((id: string) => {
     setHoveredId(id)
     const el = cardListRef.current?.querySelector(`[data-listing-id="${id}"]`)
     if (el) (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" })
   }, [])
+
+  // Hydrate from /api/listings on mount + after each search completes, so the
+  // demo always shows what's actually in the DB (not just the current session
+  // stream). Live-streamed listings retain their match_basis/citations; DB
+  // listings just won't have those fields rendered.
+  const hydrateFromDb = useCallback(async () => {
+    try {
+      const res = await fetch("/api/listings")
+      if (!res.ok) return
+      const data = (await res.json()) as Listing[]
+      setListings((prev) => {
+        // merge: keep streamed listings (which carry match_basis/citations)
+        // and pull in DB rows that aren't already present
+        const byId = new Map(prev.map((x) => [x.id, x]))
+        for (const row of data) {
+          if (!byId.has(row.id)) byId.set(row.id, row)
+        }
+        return Array.from(byId.values())
+      })
+      setHydrated(true)
+    } catch { /* silent — polling failure is fine */ }
+  }, [])
+
+  useEffect(() => {
+    hydrateFromDb()
+  }, [hydrateFromDb])
+
+  // Refetch shortly after a search wraps so just-saved rows reach the UI.
+  useEffect(() => {
+    if (!done) return
+    const t = window.setTimeout(hydrateFromDb, 1500)
+    return () => window.clearTimeout(t)
+  }, [done, hydrateFromDb])
 
   useEffect(() => {
     if (config?.defaultBudget && budget === 7500) setBudget(config.defaultBudget)
