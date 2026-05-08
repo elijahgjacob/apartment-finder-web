@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useAppConfig } from "./config-context"
+import { ZillowMap } from "./components/zillow-map"
 import type { Listing } from "./types"
 
 // Brand-blue tuned to match the Zillow lockup. Deep, vibrant.
@@ -174,17 +175,29 @@ function Citations({ listing }: { listing: Listing }) {
   )
 }
 
-function ListingCard({ l, idx, city, isNew }: { l: Listing; idx: number; city: string; isNew: boolean }) {
+function ListingCard({
+  l, idx, city, isNew, isHovered, onHover, onLeave,
+}: {
+  l: Listing; idx: number; city: string; isNew: boolean
+  isHovered?: boolean
+  onHover?: () => void
+  onLeave?: () => void
+}) {
   const href = l.url ?? `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
   return (
     <article
+      data-listing-id={l.id}
+      onMouseEnter={onHover}
+      onMouseLeave={onLeave}
       className={`group rounded-2xl overflow-hidden flex flex-col sm:flex-row transition-all duration-200 hover:-translate-y-0.5 ${isNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${isNew ? Z.blueBorder : Z.border}`,
+        border: `1px solid ${isNew || isHovered ? Z.blueBorder : Z.border}`,
         boxShadow: isNew
           ? `0 0 0 4px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
-          : `0 1px 2px rgba(15,17,21,0.04), 0 0 0 1px rgba(15,17,21,0.01)`,
+          : isHovered
+            ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
+            : `0 1px 2px rgba(15,17,21,0.04), 0 0 0 1px rgba(15,17,21,0.01)`,
       }}
     >
       {/* Visual block (placeholder: deterministic gradient + house icon) */}
@@ -389,6 +402,43 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
   )
 }
 
+function ViewToggle({ view, onChange }: { view: "split" | "list" | "map"; onChange: (v: "split" | "list" | "map") => void }) {
+  const opts: { value: "split" | "list" | "map"; label: string; icon: React.ReactNode }[] = [
+    { value: "list", label: "List", icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
+    )},
+    { value: "split", label: "Split", icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
+    )},
+    { value: "map", label: "Map", icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+    )},
+  ]
+  return (
+    <div className="inline-flex p-1 rounded-xl shrink-0" style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}>
+      {opts.map((o) => {
+        const active = view === o.value
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-sm font-semibold transition-colors"
+            style={{
+              backgroundColor: active ? Z.blue : "transparent",
+              color: active ? "white" : Z.textMid,
+              fontFamily: FONT_HEADING,
+            }}
+          >
+            {o.icon}
+            <span>{o.label}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Skeleton() {
   return (
     <div
@@ -435,6 +485,15 @@ export default function Demo() {
   const [secondsToNext, setSecondsToNext] = useState<number>(0)
   const monitorTimerRef = useRef<number | null>(null)
   const monitorTickRef = useRef<number | null>(null)
+
+  const [view, setView] = useState<"split" | "list" | "map">("split")
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const cardListRef = useRef<HTMLDivElement | null>(null)
+  const handleMarkerClick = useCallback((id: string) => {
+    setHoveredId(id)
+    const el = cardListRef.current?.querySelector(`[data-listing-id="${id}"]`)
+    if (el) (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" })
+  }, [])
 
   useEffect(() => {
     if (config?.defaultBudget && budget === 7500) setBudget(config.defaultBudget)
@@ -753,22 +812,67 @@ export default function Demo() {
 
         {(streaming || reasoning || listings.length > 0) ? (
           <>
-            <div className="mb-4">
-              <StatsBar listings={sortedListings} newCount={newIds.size} monitoring={monitorOn} />
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
-              <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
-              <div className="space-y-4">
-                {listings.length === 0 && streaming && (
-                  <>
-                    <Skeleton /><Skeleton /><Skeleton />
-                  </>
-                )}
-                {sortedListings.map((l, i) => (
-                  <ListingCard key={l.id} l={l} idx={i} city={city} isNew={newIds.has(l.id)} />
-                ))}
+            <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+              <div className="flex-1">
+                <StatsBar listings={sortedListings} newCount={newIds.size} monitoring={monitorOn} />
               </div>
+              <ViewToggle view={view} onChange={setView} />
             </div>
+
+            {view === "list" && (
+              <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
+                <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
+                <div ref={cardListRef} className="space-y-4">
+                  {listings.length === 0 && streaming && (<><Skeleton /><Skeleton /><Skeleton /></>)}
+                  {sortedListings.map((l, i) => (
+                    <ListingCard
+                      key={l.id} l={l} idx={i} city={city}
+                      isNew={newIds.has(l.id)}
+                      isHovered={hoveredId === l.id}
+                      onHover={() => setHoveredId(l.id)}
+                      onLeave={() => setHoveredId(null)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {view === "map" && (
+              <ZillowMap
+                listings={sortedListings}
+                config={config ?? null}
+                hoveredId={hoveredId}
+                onMarkerClick={handleMarkerClick}
+                height={680}
+              />
+            )}
+
+            {view === "split" && (
+              <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
+                <div ref={cardListRef} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+                  {listings.length === 0 && streaming && (<><Skeleton /><Skeleton /><Skeleton /></>)}
+                  {sortedListings.map((l, i) => (
+                    <ListingCard
+                      key={l.id} l={l} idx={i} city={city}
+                      isNew={newIds.has(l.id)}
+                      isHovered={hoveredId === l.id}
+                      onHover={() => setHoveredId(l.id)}
+                      onLeave={() => setHoveredId(null)}
+                    />
+                  ))}
+                </div>
+                <div className="lg:sticky lg:top-20 lg:self-start space-y-4">
+                  <ZillowMap
+                    listings={sortedListings}
+                    config={config ?? null}
+                    hoveredId={hoveredId}
+                    onMarkerClick={handleMarkerClick}
+                    height={500}
+                  />
+                  <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
