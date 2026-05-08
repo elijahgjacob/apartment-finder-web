@@ -24,44 +24,50 @@ function priceLabel(l: Listing): string {
 function makePriceTag(l: Listing, hovered: boolean) {
   const color = markerColor(l.score)
   const label = priceLabel(l)
+  // Width sized to fit the label snugly. Geist 700 @ 12px ≈ 7.5px/char.
+  const w = Math.max(56, Math.ceil(label.length * 7.5) + 20)
+  const h = 26
   return L.divIcon({
-    className: "",
-    html: `
-      <div style="
+    className: "zillow-price-tag",
+    html: `<div style="
         background:${hovered ? color : "white"};
         color:${hovered ? "white" : color};
         border:2px solid ${color};
-        padding:3px 8px;
-        border-radius:14px;
-        font-family:'Geist Variable', system-ui, sans-serif;
+        width:100%;
+        height:100%;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:13px;
+        font-family:'Geist Variable',system-ui,sans-serif;
         font-weight:700;
-        font-size:11px;
+        font-size:12px;
+        line-height:1;
+        letter-spacing:-0.01em;
         white-space:nowrap;
-        box-shadow:0 2px 6px rgba(15,17,21,0.16);
+        box-shadow:0 1px 3px rgba(15,17,21,0.15), 0 0 0 1px rgba(15,17,21,0.04);
         cursor:pointer;
-        transform:translate(-50%, -50%);
-        transition: transform 120ms ease;
-      ">${label}</div>
-    `,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
+        box-sizing:border-box;
+      ">${label}</div>`,
+    iconSize: [w, h],
+    iconAnchor: [w / 2, h / 2],
   })
 }
 
 function makeRefIcon() {
+  const size = 16
   return L.divIcon({
-    className: "",
-    html: `
-      <div style="
+    className: "zillow-ref-pin",
+    html: `<div style="
         background:${Z_BLUE};
-        width:14px;height:14px;
+        width:100%;height:100%;
         border:3px solid white;
         border-radius:50%;
+        box-sizing:border-box;
         box-shadow:0 0 0 2px ${Z_BLUE}, 0 2px 6px rgba(15,17,21,0.2);
-        transform:translate(-50%, -50%);
       "></div>`,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   })
 }
 
