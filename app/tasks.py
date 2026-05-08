@@ -375,25 +375,106 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
 
 
 # ── Spam scoring via Task API ────────────────────────────────────────────
+#
+# Per the cookbook: avoid subjective "is_likely_spam" outputs. Decompose
+# into fact-based booleans the API can verify with citations, then weight
+# them in code. Drop rationale/confidence — both are already returned in
+# the Task API's per-field `basis` array.
 
 _SPAM_SCHEMA = {
     "type": "object",
     "properties": {
-        "is_likely_spam": {"type": "boolean"},
-        "spam_confidence": {"type": "number", "description": "0.0–1.0"},
-        "fraud_signals": {"type": "array", "items": {"type": "string"}},
-        "rationale": {"type": "string"},
+        "demands_off_platform_payment": {
+            "type": "boolean",
+            "description": (
+                "Entity: this rental listing's body text. "
+                "Action: determine if the listing requests payment via wire transfer, "
+                "Western Union, MoneyGram, Zelle, Cash App, gift cards, or any other "
+                "off-platform / irreversible payment method. "
+                "If no payment method is mentioned, return false."
+            ),
+        },
+        "owner_claims_to_be_abroad": {
+            "type": "boolean",
+            "description": (
+                "Entity: this rental listing's body text. "
+                "Action: determine if the owner/landlord explicitly claims to be "
+                "out of the country, deployed in the military, relocated for work, "
+                "or otherwise unable to show the unit in person. "
+                "If no such claim appears, return false."
+            ),
+        },
+        "withholds_address_until_contact": {
+            "type": "boolean",
+            "description": (
+                "Entity: this rental listing's body text. "
+                "Action: determine if the listing explicitly withholds the property "
+                "address (e.g., 'address upon serious inquiry', 'message for address'). "
+                "If a specific street address is shown, return false. "
+                "If no address is mentioned at all, return false."
+            ),
+        },
+        "no_in_person_viewing_offered": {
+            "type": "boolean",
+            "description": (
+                "Entity: this rental listing's body text. "
+                "Action: determine if the listing requires email-only contact and "
+                "explicitly disallows or avoids in-person viewings (e.g., 'email only', "
+                "'no calls', 'no in-person showings'). "
+                "If a phone number, tour link, or open-house time is shown, return false."
+            ),
+        },
+        "unusual_incentives": {
+            "type": "boolean",
+            "description": (
+                "Entity: this rental listing's body text. "
+                "Action: determine if the listing offers unusually generous incentives "
+                "that suggest below-market pricing or pressure to commit (e.g., "
+                "'first month free', 'no deposit', 'rent well below market'). "
+                "Standard offers like 'pet rent waived' or 'parking included' do NOT count. "
+                "If no incentives are mentioned, return false."
+            ),
+        },
     },
-    "required": ["is_likely_spam", "spam_confidence", "fraud_signals"],
+    "required": [
+        "demands_off_platform_payment",
+        "owner_claims_to_be_abroad",
+        "withholds_address_until_contact",
+        "no_in_person_viewing_offered",
+        "unusual_incentives",
+    ],
     "additionalProperties": False,
+}
+
+# Weights chosen so any single canonical scam signal alone (off-platform
+# payment) clears the SPAM_HIDE_THRESHOLD=50, while soft signals
+# accumulate before tripping it.
+_SPAM_WEIGHTS: dict[str, int] = {
+    "demands_off_platform_payment": 60,
+    "owner_claims_to_be_abroad": 30,
+    "withholds_address_until_contact": 25,
+    "no_in_person_viewing_offered": 20,
+    "unusual_incentives": 15,
 }
 
 # Sources we trust enough to skip spam scoring on.
 _TRUSTED_SOURCES = {"apartments", "zillow", "redfin", "realtor", "trulia", "rent", "hotpads"}
 
 
+def _compute_spam_score(content: dict) -> tuple[int, list[str]]:
+    score = 0
+    flags: list[str] = []
+    for key, weight in _SPAM_WEIGHTS.items():
+        if content.get(key) is True:
+            score += weight
+            flags.append(key)
+    return min(100, score), flags
+
+
 async def _score_spam(client: ParallelClient, listing: dict, timeout: float = 90.0) -> tuple[int, list[str]]:
-    """Run a Task-API enrichment to classify the listing. Returns (score, flags)."""
+    """Run a Task-API enrichment to classify the listing.
+    Returns (score 0-100, flags). Score is computed in code from the
+    boolean facts the API verified — keeps the model's job factual."""
     try:
         run = await client.task_create(
             input_data={
@@ -427,10 +508,7 @@ async def _score_spam(client: ParallelClient, listing: dict, timeout: float = 90
 
         result = await client.task_result(run_id)
         content = ((result.get("output") or {}).get("content")) or {}
-        confidence = float(content.get("spam_confidence") or 0)
-        score = max(0, min(100, int(confidence * 100)))
-        flags = content.get("fraud_signals") or []
-        return score, flags
+        return _compute_spam_score(content)
     except (httpx.HTTPError, asyncio.TimeoutError) as e:
         return 0, [f"task_api_error:{type(e).__name__}"]
 
@@ -477,37 +555,122 @@ def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
 
 def _enrichments() -> list[dict]:
     """Fields a renter actually wants to know before contacting a landlord.
-    All extraction is done by the API; we read these values straight from
-    the candidate output — no regex on description prose."""
+
+    Each description follows the cookbook's structure:
+    Entity → Action → Specifics → Error Handling. Standardizing on an
+    empty string ("") for unknowns gives us a single sentinel to test
+    instead of N/A / null / "Not specified" / etc."""
     return [
         {"name": "street_address",
-         "description": "The exact street address of the unit (e.g. '1234 Mission St #4'). Empty if only a neighborhood is given."},
+         "description": (
+             "Entity: this rental listing's unit address. "
+             "Action: extract the exact street address as written on the page. "
+             "Specifics: include unit/apt number if shown (e.g. '1234 Mission St #4'); "
+             "do not include city, state, or zip. "
+             "If only a neighborhood or no street address is shown, return an empty string."
+         )},
         {"name": "bathrooms",
-         "description": "Number of bathrooms in the unit, as a decimal (e.g. '1.5')."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: extract the bathroom count. "
+             "Specifics: as a decimal number (e.g. '1', '1.5', '2.5'). "
+             "If the page does not state a bathroom count, return an empty string."
+         )},
         {"name": "square_feet",
-         "description": "Interior square footage of the unit, as an integer."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: extract the interior square footage. "
+             "Specifics: as an integer with no commas or 'sqft' suffix (e.g. '1200'). "
+             "If the page does not state square footage, return an empty string."
+         )},
         {"name": "available_date",
-         "description": "Date the unit becomes available for move-in (ISO format YYYY-MM-DD if known, else a phrase like 'Available now')."},
+         "description": (
+             "Entity: this rental unit's first move-in date. "
+             "Action: extract the date the unit is or becomes available. "
+             "Specifics: prefer ISO format YYYY-MM-DD if a specific date is shown. "
+             "Otherwise return one of these phrases verbatim: 'available now', "
+             "'available immediately', or 'available soon'. "
+             "If no availability information appears, return an empty string."
+         )},
         {"name": "lease_term",
-         "description": "Length and type of lease (e.g. '12-month', 'month-to-month', '6-month minimum')."},
+         "description": (
+             "Entity: this rental unit's lease length. "
+             "Action: extract the lease length and type. "
+             "Specifics: short phrase (e.g. '12-month', 'month-to-month', "
+             "'6-month minimum', 'flexible'). "
+             "If no lease term is mentioned, return an empty string."
+         )},
         {"name": "pet_policy",
-         "description": "Whether pets are allowed and any restrictions (e.g. 'Cats OK, no dogs', 'No pets', 'Dogs under 25lb')."},
+         "description": (
+             "Entity: this rental unit's pet policy. "
+             "Action: extract whether pets are allowed and any restrictions. "
+             "Specifics: short phrase (e.g. 'Cats OK, no dogs', 'No pets', "
+             "'Dogs under 25lb', 'Pets allowed'). "
+             "If pets are not mentioned at all, return an empty string."
+         )},
         {"name": "is_furnished",
-         "description": "Whether the unit is furnished, partially furnished, or unfurnished."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: classify the furnishing status. "
+             "Specifics: return one of exactly: 'furnished', 'partially furnished', "
+             "'unfurnished'. "
+             "If furnishing isn't mentioned, return an empty string."
+         )},
         {"name": "utilities_included",
-         "description": "Which utilities are included in rent (e.g. 'Water, trash', 'All utilities included', 'None included')."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: extract which utilities are included in rent. "
+             "Specifics: comma-separated list (e.g. 'water, trash', 'all included', "
+             "'none included'). "
+             "If utilities are not mentioned, return an empty string."
+         )},
         {"name": "parking_type",
-         "description": "Parking situation (e.g. 'Garage included', '1 covered spot', 'Street only', 'No parking')."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: classify the parking situation. "
+             "Specifics: short phrase (e.g. 'garage included', '1 covered spot', "
+             "'street only', 'no parking', 'extra $200/mo'). "
+             "If parking is not mentioned, return an empty string."
+         )},
         {"name": "laundry_type",
-         "description": "Laundry situation (e.g. 'In-unit washer/dryer', 'Shared on floor', 'Coin-op in basement', 'None')."},
+         "description": (
+             "Entity: this rental unit. "
+             "Action: classify the laundry situation. "
+             "Specifics: short phrase (e.g. 'in-unit washer/dryer', "
+             "'shared on floor', 'coin-op in basement', 'none'). "
+             "If laundry is not mentioned, return an empty string."
+         )},
         {"name": "building_amenities",
-         "description": "Building-level amenities, comma-separated (e.g. 'Gym, rooftop, doorman, elevator')."},
+         "description": (
+             "Entity: the building or property containing this unit. "
+             "Action: extract building-level amenities (not unit-specific). "
+             "Specifics: comma-separated list of features (e.g. "
+             "'gym, rooftop, doorman, elevator, pool'). Exclude utilities and "
+             "in-unit features. "
+             "If no building amenities are listed, return an empty string."
+         )},
         {"name": "neighborhood",
-         "description": "Specific neighborhood name within the city (e.g. 'Mission', 'SoMa', 'Hayes Valley')."},
+         "description": (
+             "Entity: the city neighborhood of this unit. "
+             "Action: extract the specific neighborhood name. "
+             "Specifics: a single name like 'Mission', 'SoMa', 'Hayes Valley'; "
+             "do not return the city or zip code. "
+             "If only the city is mentioned, return an empty string."
+         )},
         {"name": "contact_phone",
-         "description": "Phone number to inquire about the unit."},
+         "description": (
+             "Entity: the contact for this listing. "
+             "Action: extract a phone number to inquire about the unit. "
+             "Specifics: plain digits with separators (e.g. '(415) 555-1234'). "
+             "If no phone number is shown on the page, return an empty string."
+         )},
         {"name": "contact_email",
-         "description": "Email address to inquire about the unit."},
+         "description": (
+             "Entity: the contact for this listing. "
+             "Action: extract an email address to inquire about the unit. "
+             "Specifics: a single email address (e.g. 'leasing@example.com'). "
+             "If no email is shown on the page, return an empty string."
+         )},
     ]
 
 
