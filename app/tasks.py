@@ -210,7 +210,7 @@ def _output_bool(output: dict, key: str, true_words: tuple[str, ...] = ("yes", "
     return None
 
 
-def _candidate_to_listing(candidate: dict) -> dict | None:
+def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict | None:
     """Convert a FindAll matched candidate to a listing dict.
 
     Structured fields come from the API's match_condition + enrichment
@@ -253,6 +253,11 @@ def _candidate_to_listing(candidate: dict) -> dict | None:
         price = None
     if beds is not None and (beds < 0 or beds > 10):
         beds = None
+
+    # Post-filter: hard reject if user asked for N+ bedrooms and the listing
+    # advertises fewer. Allow None-beds through (rely on enrichment to fill).
+    if min_beds and beds is not None and beds < min_beds:
+        return None
 
     # Enrichments — let the API do the extraction work.
     address = _output_val(output, "street_address") or _address_from_name(name) or name
@@ -450,20 +455,24 @@ async def _score_listings_concurrently(
 # ── FindAll match conditions ─────────────────────────────────────────────
 
 def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
-    conds = [
-        {"name": "is_individual_listing",
-         "description": "The page must be a single-property listing, not a search results / category index page."},
-        {"name": "in_target_city",
-         "description": f"The property must be located in {CITY_SHORT}."},
-        {"name": "under_budget",
-         "description": f"The asking monthly rent must be at most {budget} US dollars."},
+    """Keep the list short and forgiving. Strict conditions cause zero-match
+    runs (FindAll can't always verify them from page text). We rely on
+    enrichments for the actual data, and post-filter in _candidate_to_listing
+    for hard rejections (bad URLs, missing addresses, wrong bedroom count)."""
+    return [
+        {"name": "is_rental_listing",
+         "description": (
+             f"The page is an individual rental property listing in or near {CITY_SHORT}. "
+             "It advertises a specific unit available to rent. "
+             "Not a search results page, not a news article, not a category index. "
+             "If the page describes a real property in the target area, mark this matched."
+         )},
+        {"name": "fits_budget",
+         "description": (
+             f"The asking monthly rent is at or below ${budget} US dollars. "
+             "If the rent is not shown on the page, treat this as matched (do not reject for missing data)."
+         )},
     ]
-    if min_beds:
-        conds.append({
-            "name": "matches_bedroom_count",
-            "description": f"The unit must have at least {min_beds} bedrooms (not studio, not fewer).",
-        })
-    return conds
 
 
 def _enrichments() -> list[dict]:
@@ -589,7 +598,7 @@ async def run_task(task: Task) -> None:
 
             listings: list[dict] = []
             for c in matched_candidates:
-                l = _candidate_to_listing(c)
+                l = _candidate_to_listing(c, min_beds=task.min_beds)
                 if l:
                     listings.append(l)
 
