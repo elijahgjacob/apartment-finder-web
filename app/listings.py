@@ -98,6 +98,19 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+# Same numbers used as price-plausibility floor in app/tasks.py — kept
+# here too so listings.py doesn't need to import from tasks.
+_RENT_FLOORS_SF: dict[int, int] = {
+    0: 1900, 1: 2700, 2: 3600, 3: 5200, 4: 6500, 5: 8000,
+}
+
+
+def _typical_rent(beds: int | None) -> int | None:
+    if beds is None:
+        return None
+    return _RENT_FLOORS_SF.get(beds) or _RENT_FLOORS_SF.get(min(beds, 5))
+
+
 def compute_score(listing: Listing, budget: int) -> int:
     score = 0
 
@@ -111,16 +124,29 @@ def compute_score(listing: Listing, budget: int) -> int:
     else:
         score += 5
 
+    # Price fit: U-curve. Best score for prices at 70-100% of budget
+    # ("good deal but realistic"). Penalize unrealistically low prices —
+    # they are almost always parse miscues that survived the insert-time
+    # floor check (e.g. legitimate BMR units that we let through).
     if listing.price:
+        typical = _typical_rent(listing.bedrooms)
         ratio = listing.price / budget
-        if ratio <= 0.7:
-            score += 40
+
+        if ratio > 1.0:
+            price_pts = 0  # over budget
+        elif typical is not None and listing.price < typical * 0.6:
+            # Way below market for this bedroom count → suspicious, low pts
+            price_pts = 8
+        elif ratio <= 0.7:
+            price_pts = 40
         elif ratio <= 0.8:
-            score += 32
+            price_pts = 36
         elif ratio <= 0.9:
-            score += 22
-        elif ratio <= 1.0:
-            score += 12
+            price_pts = 28
+        else:  # 0.9 < ratio <= 1.0
+            price_pts = 18
+
+        score += price_pts
 
     if listing.lat is not None and listing.lng is not None:
         km = _haversine_km(listing.lat, listing.lng, SEARCH_LAT, SEARCH_LNG)

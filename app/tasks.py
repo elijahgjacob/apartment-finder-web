@@ -75,6 +75,26 @@ def create_task(query: str, budget: int, min_beds: int | None = None) -> Task:
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
+# Realistic monthly-rent floors by bedroom count, San Francisco-area.
+# Used as a sanity check on parsed prices — anything below ~50% of these
+# values is almost always a parse miscue (street number, deposit, fee).
+# (Same numbers the frontend uses for the "budget too low" warning.)
+_RENT_FLOORS_SF: dict[int, int] = {
+    0: 1900, 1: 2700, 2: 3600, 3: 5200, 4: 6500, 5: 8000,
+}
+
+
+def _absolute_min_price(beds: int | None) -> int:
+    """Lower bound for plausibility checks. If we don't know the bed count,
+    use a global $1,500 floor (no real US rental is below this). If we do,
+    use 55% of the typical rent for that bedroom count — permissive enough
+    for genuine BMR units, strict enough to catch street-number miscues."""
+    if beds is None:
+        return 1500
+    typical = _RENT_FLOORS_SF.get(beds) or _RENT_FLOORS_SF.get(min(beds, 5)) or 2000
+    return int(typical * 0.55)
+
+
 def _detect_source(url: str) -> str:
     for site in LISTING_SITES.split(","):
         domain = site.strip()
@@ -274,20 +294,20 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
     if beds is not None and (beds < 0 or beds > 10):
         beds = None
 
-    # Implausibly cheap → almost certainly a parse error (e.g. the model
-    # picked up the street number as rent). No real US rental is below $1,200.
-    if price is not None and price < 1200:
-        return None
+    # City-aware floor by bedroom count. If the model returned a price
+    # well below typical rent for this unit size, treat it as a parse
+    # miscue (street number, deposit, or fee picked up as rent).
+    if price is not None:
+        if price < _absolute_min_price(beds):
+            return None
 
-    # Defensive: reject when the parsed price exactly equals the leading
-    # number of the street address (canonical "789 Page St → $789" miscue).
-    addr_num_match = re.match(r"\s*(\d+)", address)
-    if (
-        price is not None
-        and addr_num_match
-        and int(addr_num_match.group(1)) == price
-    ):
-        return None
+    # Defensive: reject when the parsed price equals ANY numeric token
+    # in the street address (street number, unit number, zip, etc.).
+    # Catches '1475 Fillmore St / $1475' and 'Unit 808 / $808' alike.
+    if price is not None:
+        for n in re.findall(r"\d+", address):
+            if int(n) == price:
+                return None
 
     # Post-filter: hard reject if user asked for N+ bedrooms and the listing
     # advertises fewer. Allow None-beds through (rely on enrichment to fill).
