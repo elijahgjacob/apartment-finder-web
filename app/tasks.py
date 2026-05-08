@@ -237,32 +237,61 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
         if re.search(pat, url, re.IGNORECASE):
             return None
 
-    # Core fields — match_conditions return scalar-ish values.
-    price = None
-    beds = None
-    for key, obj in output.items():
-        val = obj.get("value", "")
-        if not val:
-            continue
-        if "rent" in key or "price" in key or "cost" in key or "amount" in key:
-            price = _parse_int(val)
-        if "bedroom" in key or "bed" in key:
-            beds = _parse_int(val)
+    # Address comes first — needed for the price-vs-street-number sanity check.
+    address = _output_val(output, "street_address") or _address_from_name(name) or name
+    if not address or len(address) < 5:
+        return None
 
+    # Core fields — prefer the explicit enrichments, fall back to any
+    # match_condition output that happens to surface a number.
+    rent_str = _output_val(output, "monthly_rent_usd")
+    price = _parse_int(rent_str) if rent_str else None
+    if price is None:
+        for key, obj in output.items():
+            val = obj.get("value", "")
+            if not val:
+                continue
+            if "rent" in key or "price" in key or "cost" in key or "amount" in key:
+                price = _parse_int(val)
+                if price is not None:
+                    break
+
+    beds_str = _output_val(output, "bedrooms")
+    beds = _parse_int(beds_str) if beds_str else None
+    if beds is None:
+        for key, obj in output.items():
+            val = obj.get("value", "")
+            if not val:
+                continue
+            if "bedroom" in key or ("bed" in key and "br" in key):
+                beds = _parse_int(val)
+                if beds is not None:
+                    break
+
+    # Coarse plausibility bounds.
     if price is not None and (price < 500 or price > 50000):
         price = None
     if beds is not None and (beds < 0 or beds > 10):
         beds = None
 
+    # Implausibly cheap → almost certainly a parse error (e.g. the model
+    # picked up the street number as rent). No real US rental is below $1,200.
+    if price is not None and price < 1200:
+        return None
+
+    # Defensive: reject when the parsed price exactly equals the leading
+    # number of the street address (canonical "789 Page St → $789" miscue).
+    addr_num_match = re.match(r"\s*(\d+)", address)
+    if (
+        price is not None
+        and addr_num_match
+        and int(addr_num_match.group(1)) == price
+    ):
+        return None
+
     # Post-filter: hard reject if user asked for N+ bedrooms and the listing
     # advertises fewer. Allow None-beds through (rely on enrichment to fill).
     if min_beds and beds is not None and beds < min_beds:
-        return None
-
-    # Enrichments — let the API do the extraction work.
-    address = _output_val(output, "street_address") or _address_from_name(name) or name
-
-    if not address or len(address) < 5:
         return None
 
     # Post-filter: address looks like a non-address blurb.
@@ -568,6 +597,26 @@ def _enrichments() -> list[dict]:
              "Specifics: include unit/apt number if shown (e.g. '1234 Mission St #4'); "
              "do not include city, state, or zip. "
              "If only a neighborhood or no street address is shown, return an empty string."
+         )},
+        {"name": "monthly_rent_usd",
+         "description": (
+             "Entity: this rental unit's asking monthly rent. "
+             "Action: extract the listed monthly rent. "
+             "Specifics: an integer in US dollars, no '$' sign, no commas, no '/mo' "
+             "suffix (e.g. '4500' for $4,500/month). Use the headline rent, NOT a "
+             "deposit, application fee, security deposit, or 'starting at' range minimum. "
+             "Do NOT confuse the rent with the street number of the address, the zip "
+             "code, the year built, or square footage. "
+             "If no monthly rent is shown on the page, return an empty string."
+         )},
+        {"name": "bedrooms",
+         "description": (
+             "Entity: this rental unit. "
+             "Action: extract the bedroom count of the unit being advertised. "
+             "Specifics: an integer (e.g. '0' for studio, '3' for a 3-bedroom). "
+             "Pick the number for the specific unit; do not return a range or "
+             "the bedroom counts of other units in the same building. "
+             "If the bedroom count is not shown, return an empty string."
          )},
         {"name": "bathrooms",
          "description": (
