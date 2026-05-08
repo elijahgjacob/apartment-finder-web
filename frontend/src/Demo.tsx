@@ -1230,11 +1230,11 @@ export default function Demo() {
             </span>
           </div>
           <a
-            href="/"
+            href="/docs"
             className="text-xs font-bold hover:underline"
             style={{ color: Z.blueDark }}
           >
-            ← back to listings
+            How it works →
           </a>
         </div>
       </header>
