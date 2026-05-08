@@ -22,12 +22,12 @@ SPAM_HIDE_THRESHOLD = int(os.environ.get("SPAM_HIDE_THRESHOLD", "50"))
 
 LISTING_SITES = os.environ.get(
     "LISTING_SITES",
-    # Major aggregators (zillow.com + apartments.com are blocked — see BLOCKED_DOMAINS)
+    # Major aggregators (zillow / apartments.com / yelp.com are blocked — see BLOCKED_DOMAINS)
     "trulia.com,craigslist.org,hotpads.com,rent.com,"
     "redfin.com,realtor.com,padmapper.com,rentcafe.com,zumper.com,movoto.com,"
     "rentberry.com,showcase.com,compass.com,rentsfnow.com,"
     # Listing-adjacent
-    "homes.mercurynews.com,yelp.com"
+    "homes.mercurynews.com"
 )
 
 # Domains we explicitly do NOT want in results (stale-prone, walled garden,
@@ -36,7 +36,7 @@ LISTING_SITES = os.environ.get(
 BLOCKED_DOMAINS = tuple(
     d.strip().lower() for d in os.environ.get(
         "BLOCKED_DOMAINS",
-        "zillow.com,apartments.com",
+        "zillow.com,apartments.com,yelp.com",
     ).split(",") if d.strip()
 )
 

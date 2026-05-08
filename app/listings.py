@@ -148,16 +148,20 @@ def compute_score(listing: Listing, budget: int) -> int:
 
         score += price_pts
 
+    # Looser proximity weighting — being right next to the reference point
+    # used to dominate the score (25 pts of 100). Now distance contributes
+    # at most 15 pts and the floor is 6, so price + recency drive ranking
+    # more than location-clustering does.
     if listing.lat is not None and listing.lng is not None:
         km = _haversine_km(listing.lat, listing.lng, SEARCH_LAT, SEARCH_LNG)
         if km < 1.0:
-            score += 25
-        elif km < 2.0:
-            score += 18
-        elif km < 3.5:
-            score += 10
+            score += 15
+        elif km < 2.5:
+            score += 12
+        elif km < 5.0:
+            score += 9
         else:
-            score += 3
+            score += 6
 
     return min(score, 100)
 
