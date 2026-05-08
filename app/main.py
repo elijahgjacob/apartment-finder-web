@@ -11,13 +11,22 @@ from pydantic import BaseModel
 
 from .config import (
     APP_TITLE, CITY, CITY_SHORT,
-    DEFAULT_BUDGET, DEFAULT_QUERY, SEARCH_INTERVAL,
+    DEFAULT_BUDGET, DEFAULT_QUERY,
+    MONITOR_POLL_SECONDS,
     REFERENCE_POINT_NAME, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
     MAP_CENTER_LAT, MAP_CENTER_LNG, MAP_ZOOM,
 )
 from .db import get_db
 from .geocode import geocode_address
 from .listings import get_listings, Listing
+from .monitor import (
+    ensure_monitor,
+    get_status as monitor_status,
+    poll_once as monitor_poll_once,
+    replace_monitor,
+    delete_monitor,
+)
+from .parallel_client import ParallelClient
 from .tasks import create_task, get_task, run_task, stream_task
 
 
@@ -47,25 +56,41 @@ def _backfill_geocodes():
             print(f"[geocode] {addr} → not found")
 
 
-async def _background_search_loop():
+async def _monitor_poll_loop():
+    """Background task: own one Parallel Monitor and pull events on a short
+    cadence. Replaces the previous FindAll polling cron — Monitor handles
+    discovery + dedup natively, we only persist new event_ids and render."""
     await asyncio.sleep(2)
+    api_key = os.environ.get("PARALLEL_API_KEY")
+    if not api_key:
+        print("[monitor] PARALLEL_API_KEY not set — monitor loop disabled")
+        return
+
     while True:
-        if _bg_lock.locked():
-            print("[bg] previous bg search still running — skipping this tick")
-        else:
-            async with _bg_lock:
-                try:
-                    task = create_task(query=DEFAULT_QUERY, budget=DEFAULT_BUDGET)
-                    await run_task(task)
-                    await asyncio.to_thread(_backfill_geocodes)
-                except Exception as e:
-                    print(f"[bg] error: {e}")
-        await asyncio.sleep(SEARCH_INTERVAL)
+        try:
+            async with ParallelClient(api_key=api_key) as client:
+                mon = await ensure_monitor(client)
+                monitor_id = mon["monitor_id"]
+                while True:
+                    if _bg_lock.locked():
+                        # never two pollers at once
+                        await asyncio.sleep(MONITOR_POLL_SECONDS)
+                        continue
+                    async with _bg_lock:
+                        new_listings = await monitor_poll_once(client, monitor_id)
+                        if new_listings:
+                            await asyncio.to_thread(_backfill_geocodes)
+                    await asyncio.sleep(MONITOR_POLL_SECONDS)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            print(f"[monitor] loop error: {e}; retrying in 30s")
+            await asyncio.sleep(30)
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    bg = asyncio.create_task(_background_search_loop())
+    bg = asyncio.create_task(_monitor_poll_loop())
     yield
     bg.cancel()
 
@@ -134,6 +159,45 @@ async def get_config():
         "defaultBudget": DEFAULT_BUDGET,
         "defaultQuery": DEFAULT_QUERY,
     })
+
+
+@app.get("/api/monitor")
+async def get_monitor_status():
+    """Live state of the background Monitor — id, frequency, last run, recent event count."""
+    api_key = os.environ.get("PARALLEL_API_KEY")
+    if not api_key:
+        return JSONResponse(await monitor_status(None))
+    async with ParallelClient(api_key=api_key) as client:
+        return JSONResponse(await monitor_status(client))
+
+
+class MonitorReplaceRequest(BaseModel):
+    query: str
+
+
+@app.post("/api/monitor", dependencies=[Depends(require_internal_key)])
+async def replace_monitor_query(body: MonitorReplaceRequest):
+    """Stop the current Monitor and create a fresh one watching `query`.
+    Use to switch the always-on watch from the default seed query to
+    whatever the user just searched for."""
+    if not body.query.strip():
+        raise HTTPException(status_code=400, detail="query is required")
+    api_key = os.environ.get("PARALLEL_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="PARALLEL_API_KEY not set")
+    async with ParallelClient(api_key=api_key) as client:
+        await replace_monitor(client, body.query)
+        return JSONResponse(await monitor_status(client))
+
+
+@app.delete("/api/monitor", dependencies=[Depends(require_internal_key)])
+async def stop_monitor():
+    api_key = os.environ.get("PARALLEL_API_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="PARALLEL_API_KEY not set")
+    async with ParallelClient(api_key=api_key) as client:
+        deleted = await delete_monitor(client)
+    return JSONResponse({"deleted": deleted})
 
 
 @app.get("/api/listings")

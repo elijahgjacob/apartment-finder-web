@@ -38,12 +38,17 @@ const SUGGESTIONS = [
   "Furnished 1BR for a 6-month lease, dog-friendly, under $4000",
 ]
 
-const MONITOR_INTERVALS: { label: string; seconds: number }[] = [
-  { label: "1 min", seconds: 60 },
-  { label: "5 min", seconds: 300 },
-  { label: "15 min", seconds: 900 },
-  { label: "30 min", seconds: 1800 },
-]
+type MonitorStatus = {
+  active: boolean
+  monitor_id?: string | null
+  query?: string
+  frequency?: string
+  processor?: string
+  status?: string
+  last_run_at?: string
+  created_at?: string
+  events_last_24h?: number
+}
 
 // ── Icon set ─────────────────────────────────────────────────────────────
 
@@ -74,10 +79,17 @@ const PinIcon = ({ size = 12, color = Z.textFaint }: { size?: number; color?: st
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-function formatCountdown(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`
+function relativeTime(iso?: string): string {
+  if (!iso) return "—"
+  const ms = Date.now() - new Date(iso).getTime()
+  if (ms < 0) return "just now"
+  const m = Math.floor(ms / 60000)
+  if (m < 1) return "just now"
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return `${d}d ago`
 }
 
 // Realistic monthly-rent floors by bed count, San Francisco-area.
@@ -682,6 +694,97 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
   )
 }
 
+function MonitorStrip({
+  monitor, busy, query, onWatch, onStop,
+}: {
+  monitor: MonitorStatus | null
+  busy: boolean
+  query: string
+  onWatch: () => void
+  onStop: () => void
+}) {
+  const active = !!monitor?.active
+  const watchedQuery = monitor?.query ?? ""
+  const queryDiffersFromWatch = active && query.trim().length > 0 && query.trim() !== watchedQuery.trim()
+  const queryEmpty = query.trim().length === 0
+
+  return (
+    <div
+      className="rounded-2xl flex flex-wrap items-center gap-3 px-5 py-4 mb-6 transition-all"
+      style={{
+        backgroundColor: active ? Z.blueSoft : Z.bgCard,
+        border: `1px solid ${active ? Z.blueBorder : Z.border}`,
+      }}
+    >
+      <div className="flex items-center gap-2 shrink-0">
+        {active ? (
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: Z.blue }} />
+          </span>
+        ) : (
+          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: Z.textFaint }} />
+        )}
+        <span className="text-[11px] uppercase tracking-[0.14em] font-bold" style={{ color: active ? Z.blueDark : Z.textMid }}>
+          {active ? "Always-on watch" : "No watch active"}
+        </span>
+      </div>
+
+      <div className="flex-1 min-w-0 text-sm flex items-center gap-2 flex-wrap" style={{ color: Z.textMid }}>
+        {active ? (
+          <>
+            <span
+              className="text-[12px] px-2 py-0.5 rounded truncate max-w-[420px]"
+              style={{ backgroundColor: "white", border: `1px solid ${Z.blueBorder}`, color: Z.blueDarker, fontFamily: FONT_HEADING, fontWeight: 600 }}
+              title={watchedQuery}
+            >
+              {watchedQuery.length > 80 ? watchedQuery.slice(0, 80) + "…" : (watchedQuery || "—")}
+            </span>
+            <span className="text-[12px]" style={{ color: Z.textMid }}>
+              every <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor?.frequency ?? "—"}</strong>
+              {" · "}
+              last run <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{relativeTime(monitor?.last_run_at)}</strong>
+              {monitor?.events_last_24h != null && (
+                <>{" · "}<strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor.events_last_24h}</strong> event{monitor.events_last_24h === 1 ? "" : "s"} in 24h</>
+              )}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: Z.textMid }}>
+            Save a search and Parallel will quietly watch the web for new matches — they appear here as they're found.
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-center gap-2 shrink-0">
+        {active && (
+          <button
+            type="button"
+            onClick={onStop}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-all hover:brightness-110"
+            style={{ backgroundColor: "white", color: Z.text, border: `1px solid ${Z.border}`, fontFamily: FONT_HEADING }}
+          >
+            Stop
+          </button>
+        )}
+        {(queryDiffersFromWatch || (!active && !queryEmpty)) && (
+          <button
+            type="button"
+            onClick={onWatch}
+            disabled={busy || queryEmpty}
+            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+            style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING }}
+            title={active ? "Replace the watched query with what's in the search bar" : "Start a Parallel Monitor for this query"}
+          >
+            {busy ? "Saving…" : (active ? "Watch this instead" : "Watch this query")}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function HiddenScoresToggle({ hiddenCount, showAll, onToggle }: { hiddenCount: number; showAll: boolean; onToggle: () => void }) {
   if (hiddenCount === 0 && !showAll) return null
   return (
@@ -703,13 +806,12 @@ function HiddenScoresToggle({ hiddenCount, showAll, onToggle }: { hiddenCount: n
   )
 }
 
-function ViewToggle({ view, onChange }: { view: "split" | "list" | "map"; onChange: (v: "split" | "list" | "map") => void }) {
-  const opts: { value: "split" | "list" | "map"; label: string; icon: React.ReactNode }[] = [
+type ViewMode = "list" | "map"
+
+function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
+  const opts: { value: ViewMode; label: string; icon: React.ReactNode }[] = [
     { value: "list", label: "List", icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
-    )},
-    { value: "split", label: "Split", icon: (
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="8" height="16" rx="1.5"/><rect x="13" y="4" width="8" height="16" rx="1.5"/></svg>
     )},
     { value: "map", label: "Map", icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
@@ -779,14 +881,11 @@ export default function Demo() {
   const [done, setDone] = useState(false)
   const evtRef = useRef<EventSource | null>(null)
 
-  const [monitorOn, setMonitorOn] = useState(false)
-  const [monitorInterval, setMonitorInterval] = useState(300)
-  const [monitorQuery, setMonitorQuery] = useState<string>("")
-  const [secondsToNext, setSecondsToNext] = useState<number>(0)
-  const monitorTimerRef = useRef<number | null>(null)
-  const monitorTickRef = useRef<number | null>(null)
+  // Backend monitor state — driven by GET /api/monitor.
+  const [monitor, setMonitor] = useState<MonitorStatus | null>(null)
+  const [monitorBusy, setMonitorBusy] = useState(false)
 
-  const [view, setView] = useState<"split" | "list" | "map">("split")
+  const [view, setView] = useState<ViewMode>("list")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [hydrated, setHydrated] = useState(false)
   const cardListRef = useRef<HTMLDivElement | null>(null)
@@ -895,49 +994,61 @@ export default function Demo() {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    startSearch(query, { keepListings: monitorOn })
-    if (monitorOn) setMonitorQuery(query)
+    startSearch(query)
   }
 
-  const stopMonitor = useCallback(() => {
-    if (monitorTimerRef.current) { window.clearInterval(monitorTimerRef.current); monitorTimerRef.current = null }
-    if (monitorTickRef.current) { window.clearInterval(monitorTickRef.current); monitorTickRef.current = null }
-    setMonitorOn(false)
-    setMonitorQuery("")
-    setSecondsToNext(0)
+  // ── Backend monitor lifecycle ──
+  const fetchMonitor = useCallback(async () => {
+    try {
+      const res = await fetch("/api/monitor")
+      if (res.ok) setMonitor(await res.json())
+    } catch { /* silent — polling failure is fine */ }
   }, [])
 
-  const startMonitor = useCallback(() => {
-    const q = query.trim()
-    if (!q) { setError("Type a query first, then start monitoring."); return }
-    setMonitorQuery(q)
-    setMonitorOn(true)
-    setSecondsToNext(monitorInterval)
-    if (!streaming) startSearch(q, { keepListings: true })
-    if (monitorTimerRef.current) window.clearInterval(monitorTimerRef.current)
-    if (monitorTickRef.current) window.clearInterval(monitorTickRef.current)
-    monitorTimerRef.current = window.setInterval(() => {
-      startSearch(q, { keepListings: true })
-      setSecondsToNext(monitorInterval)
-    }, monitorInterval * 1000)
-    monitorTickRef.current = window.setInterval(() => {
-      setSecondsToNext((s) => (s > 0 ? s - 1 : monitorInterval))
-    }, 1000)
-  }, [query, monitorInterval, startSearch, streaming])
-
   useEffect(() => {
-    if (!monitorOn) return
-    if (monitorTimerRef.current) window.clearInterval(monitorTimerRef.current)
-    monitorTimerRef.current = window.setInterval(() => {
-      if (monitorQuery) startSearch(monitorQuery, { keepListings: true })
-      setSecondsToNext(monitorInterval)
-    }, monitorInterval * 1000)
-    setSecondsToNext(monitorInterval)
-    return () => { if (monitorTimerRef.current) window.clearInterval(monitorTimerRef.current) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [monitorInterval])
+    fetchMonitor()
+    const t = window.setInterval(fetchMonitor, 30_000)
+    return () => window.clearInterval(t)
+  }, [fetchMonitor])
 
-  useEffect(() => () => { stopMonitor() }, [stopMonitor])
+  // Refresh listings every 30s — picks up new ones the backend Monitor saved.
+  useEffect(() => {
+    const t = window.setInterval(hydrateFromDb, 30_000)
+    return () => window.clearInterval(t)
+  }, [hydrateFromDb])
+
+  const watchThisQuery = useCallback(async () => {
+    const q = query.trim()
+    if (!q) { setError("Type a query first, then save it as the watch."); return }
+    setMonitorBusy(true)
+    try {
+      const res = await fetch("/api/monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setError(j.detail ?? `HTTP ${res.status}`)
+        return
+      }
+      setMonitor(await res.json())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "monitor save failed")
+    } finally {
+      setMonitorBusy(false)
+    }
+  }, [query])
+
+  const stopBackendMonitor = useCallback(async () => {
+    setMonitorBusy(true)
+    try {
+      await fetch("/api/monitor", { method: "DELETE" })
+      await fetchMonitor()
+    } finally {
+      setMonitorBusy(false)
+    }
+  }, [fetchMonitor])
 
   const STRONG_FIT_THRESHOLD = 70
 
@@ -1136,7 +1247,7 @@ export default function Demo() {
               <button
                 key={s}
                 type="button"
-                onClick={() => { setQuery(s); startSearch(s, { keepListings: monitorOn }) }}
+                onClick={() => { setQuery(s); startSearch(s) }}
                 className="text-xs px-3 py-1.5 rounded-full transition-all hover:-translate-y-0.5 hover:shadow-sm"
                 style={{
                   backgroundColor: Z.bgCard,
@@ -1153,66 +1264,14 @@ export default function Demo() {
       </section>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Live Monitor strip */}
-        <div
-          className="rounded-2xl flex flex-wrap items-center gap-3 px-5 py-4 mb-6 transition-all"
-          style={{
-            backgroundColor: monitorOn ? Z.blueSoft : Z.bgCard,
-            border: `1px solid ${monitorOn ? Z.blueBorder : Z.border}`,
-          }}
-        >
-          <button
-            type="button"
-            onClick={monitorOn ? stopMonitor : startMonitor}
-            className="px-4 py-2 rounded-xl text-sm font-bold transition-all hover:brightness-110 active:scale-[0.98]"
-            style={{
-              backgroundColor: monitorOn ? Z.red : Z.blue,
-              color: "white",
-              fontFamily: FONT_HEADING,
-            }}
-          >
-            {monitorOn ? "■  Stop monitoring" : "●  Start live monitor"}
-          </button>
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: Z.textFaint }}>
-              Refresh
-            </label>
-            <select
-              value={monitorInterval}
-              onChange={(e) => setMonitorInterval(parseInt(e.target.value))}
-              className="bg-white border rounded-lg px-2.5 py-1.5 text-sm font-semibold cursor-pointer"
-              style={{ color: Z.text, borderColor: Z.border, fontFamily: FONT_HEADING }}
-            >
-              {MONITOR_INTERVALS.map((m) => (
-                <option key={m.seconds} value={m.seconds}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-          {monitorOn ? (
-            <div className="text-sm flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
-                <span className="relative inline-flex rounded-full h-2 w-2" style={{ backgroundColor: Z.blue }} />
-              </span>
-              <span style={{ color: Z.text }}>Watching</span>
-              <span
-                className="font-mono text-[11px] px-2 py-0.5 rounded truncate max-w-[280px]"
-                style={{ backgroundColor: "white", border: `1px solid ${Z.blueBorder}`, color: Z.blueDarker }}
-                title={monitorQuery}
-              >
-                {monitorQuery.length > 60 ? monitorQuery.slice(0, 60) + "…" : monitorQuery}
-              </span>
-              <span style={{ color: Z.textFaint }}>·</span>
-              <span style={{ color: Z.textSoft }}>
-                next refresh in <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{formatCountdown(secondsToNext)}</strong>
-              </span>
-            </div>
-          ) : (
-            <span className="text-sm" style={{ color: Z.textMid }}>
-              Keep your search alive — new matches will appear and highlight automatically.
-            </span>
-          )}
-        </div>
+        {/* Backend Monitor strip — reflects /api/monitor */}
+        <MonitorStrip
+          monitor={monitor}
+          busy={monitorBusy}
+          query={query}
+          onWatch={watchThisQuery}
+          onStop={stopBackendMonitor}
+        />
 
         {error && (
           <div
@@ -1227,7 +1286,7 @@ export default function Demo() {
           <>
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
-                <StatsBar listings={visibleListings} newCount={newIds.size} monitoring={monitorOn} />
+                <StatsBar listings={visibleListings} newCount={newIds.size} monitoring={!!monitor?.active} />
               </div>
               <ViewToggle view={view} onChange={setView} />
             </div>
@@ -1263,38 +1322,6 @@ export default function Demo() {
                 onMarkerClick={handleMarkerClick}
                 height={680}
               />
-            )}
-
-            {view === "split" && (
-              <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
-                <div ref={cardListRef} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-                  {listings.length === 0 && streaming && (<><Skeleton /><Skeleton /><Skeleton /></>)}
-                  {visibleListings.map((l, i) => (
-                    <ListingCard
-                      key={l.id} l={l} idx={i} city={city}
-                      isNew={newIds.has(l.id)}
-                      isHovered={hoveredId === l.id}
-                      onHover={() => setHoveredId(l.id)}
-                      onLeave={() => setHoveredId(null)}
-                    />
-                  ))}
-                  <HiddenScoresToggle
-                    hiddenCount={hiddenCount}
-                    showAll={showAllScores}
-                    onToggle={() => setShowAllScores((v) => !v)}
-                  />
-                </div>
-                <div className="lg:sticky lg:top-20 lg:self-start space-y-4">
-                  <ZillowMap
-                    listings={visibleListings}
-                    config={config ?? null}
-                    hoveredId={hoveredId}
-                    onMarkerClick={handleMarkerClick}
-                    height={500}
-                  />
-                  <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
-                </div>
-              </div>
             )}
           </>
         ) : (

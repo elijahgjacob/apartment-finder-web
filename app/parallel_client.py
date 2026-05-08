@@ -120,3 +120,38 @@ class ParallelClient:
         r = await self._client.get(f"/v1/tasks/runs/{run_id}")
         r.raise_for_status()
         return r.json()
+
+    # ── Monitor (v1) ─────────────────────────────────────────────────────
+
+    async def monitor_create(self, body: dict) -> dict:
+        r = await self._client.post("/v1/monitors", json=body)
+        r.raise_for_status()
+        return r.json()
+
+    async def monitor_get(self, monitor_id: str) -> dict:
+        r = await self._client.get(f"/v1/monitors/{monitor_id}")
+        r.raise_for_status()
+        return r.json()
+
+    async def monitor_events(
+        self,
+        monitor_id: str,
+        event_group_id: str | None = None,
+        include_completions: bool = False,
+    ) -> dict:
+        params: dict[str, Any] = {}
+        if event_group_id:
+            params["event_group_id"] = event_group_id
+        if include_completions:
+            params["include_completions"] = "true"
+        r = await self._client.get(
+            f"/v1/monitors/{monitor_id}/events",
+            params=params or None,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def monitor_delete(self, monitor_id: str) -> None:
+        # Parallel uses POST /cancel — DELETE returns "No Product supports method".
+        r = await self._client.post(f"/v1/monitors/{monitor_id}/cancel", json={})
+        r.raise_for_status()
