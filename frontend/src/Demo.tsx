@@ -682,6 +682,27 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
   )
 }
 
+function HiddenScoresToggle({ hiddenCount, showAll, onToggle }: { hiddenCount: number; showAll: boolean; onToggle: () => void }) {
+  if (hiddenCount === 0 && !showAll) return null
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full mt-2 py-3 rounded-xl text-sm transition-colors hover:bg-white"
+      style={{
+        backgroundColor: Z.bgCard,
+        border: `1px dashed ${Z.border}`,
+        color: Z.textMid,
+      }}
+    >
+      {showAll
+        ? <>← <span className="font-semibold">Hide poor-fit results</span> (only show strong fits ≥ 70/100)</>
+        : <>Show <strong style={{ color: Z.text }}>{hiddenCount}</strong> hidden {hiddenCount === 1 ? "result" : "results"} below the strong-fit bar →</>
+      }
+    </button>
+  )
+}
+
 function ViewToggle({ view, onChange }: { view: "split" | "list" | "map"; onChange: (v: "split" | "list" | "map") => void }) {
   const opts: { value: "split" | "list" | "map"; label: string; icon: React.ReactNode }[] = [
     { value: "list", label: "List", icon: (
@@ -918,10 +939,21 @@ export default function Demo() {
 
   useEffect(() => () => { stopMonitor() }, [stopMonitor])
 
+  const STRONG_FIT_THRESHOLD = 70
+
   const sortedListings = useMemo(
     () => [...listings].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
     [listings],
   )
+
+  const [showAllScores, setShowAllScores] = useState(false)
+  const visibleListings = useMemo(
+    () => showAllScores
+      ? sortedListings
+      : sortedListings.filter((l) => (l.score ?? 0) >= STRONG_FIT_THRESHOLD),
+    [sortedListings, showAllScores],
+  )
+  const hiddenCount = sortedListings.length - visibleListings.length
 
   // Realism check is only meaningful when the user EXPLICITLY typed a budget
   // (not when we're falling back to a default). Otherwise we'd nag every
@@ -1195,7 +1227,7 @@ export default function Demo() {
           <>
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
-                <StatsBar listings={sortedListings} newCount={newIds.size} monitoring={monitorOn} />
+                <StatsBar listings={visibleListings} newCount={newIds.size} monitoring={monitorOn} />
               </div>
               <ViewToggle view={view} onChange={setView} />
             </div>
@@ -1205,7 +1237,7 @@ export default function Demo() {
                 <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
                 <div ref={cardListRef} className="space-y-4">
                   {listings.length === 0 && streaming && (<><Skeleton /><Skeleton /><Skeleton /></>)}
-                  {sortedListings.map((l, i) => (
+                  {visibleListings.map((l, i) => (
                     <ListingCard
                       key={l.id} l={l} idx={i} city={city}
                       isNew={newIds.has(l.id)}
@@ -1214,13 +1246,18 @@ export default function Demo() {
                       onLeave={() => setHoveredId(null)}
                     />
                   ))}
+                  <HiddenScoresToggle
+                    hiddenCount={hiddenCount}
+                    showAll={showAllScores}
+                    onToggle={() => setShowAllScores((v) => !v)}
+                  />
                 </div>
               </div>
             )}
 
             {view === "map" && (
               <ZillowMap
-                listings={sortedListings}
+                listings={visibleListings}
                 config={config ?? null}
                 hoveredId={hoveredId}
                 onMarkerClick={handleMarkerClick}
@@ -1232,7 +1269,7 @@ export default function Demo() {
               <div className="grid grid-cols-1 lg:grid-cols-[3fr_4fr] gap-6">
                 <div ref={cardListRef} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
                   {listings.length === 0 && streaming && (<><Skeleton /><Skeleton /><Skeleton /></>)}
-                  {sortedListings.map((l, i) => (
+                  {visibleListings.map((l, i) => (
                     <ListingCard
                       key={l.id} l={l} idx={i} city={city}
                       isNew={newIds.has(l.id)}
@@ -1241,10 +1278,15 @@ export default function Demo() {
                       onLeave={() => setHoveredId(null)}
                     />
                   ))}
+                  <HiddenScoresToggle
+                    hiddenCount={hiddenCount}
+                    showAll={showAllScores}
+                    onToggle={() => setShowAllScores((v) => !v)}
+                  />
                 </div>
                 <div className="lg:sticky lg:top-20 lg:self-start space-y-4">
                   <ZillowMap
-                    listings={sortedListings}
+                    listings={visibleListings}
                     config={config ?? null}
                     hoveredId={hoveredId}
                     onMarkerClick={handleMarkerClick}
