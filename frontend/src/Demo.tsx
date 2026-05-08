@@ -80,6 +80,36 @@ function formatCountdown(seconds: number): string {
   return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`
 }
 
+// Realistic monthly-rent floors by bed count, San Francisco-area.
+// (Used to flag impossible budgets before a search burns API quota.)
+const RENT_FLOORS_SF: Record<number, number> = {
+  0: 1900,   // studio
+  1: 2700,
+  2: 3600,
+  3: 5200,
+  4: 6500,
+  5: 8000,
+}
+
+const WORD_TO_NUM: Record<string, number> = {
+  studio: 0, zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
+}
+
+function extractBedsFromQuery(query: string): number | null {
+  if (/\bstudio\b/i.test(query)) return 0
+  const m = query.match(/\b(\d+|one|two|three|four|five|six)\s*[-+]?\s*(?:br|bed|bedroom|bedrooms)\b/i)
+  if (!m) return null
+  const w = m[1].toLowerCase()
+  if (WORD_TO_NUM[w] != null) return WORD_TO_NUM[w]
+  const n = parseInt(w)
+  return Number.isFinite(n) ? n : null
+}
+
+function realisticFloor(beds: number | null): number | null {
+  if (beds == null) return null
+  return RENT_FLOORS_SF[beds] ?? RENT_FLOORS_SF[Math.min(beds, 5)] ?? null
+}
+
 function avgPrice(listings: Listing[]): number | null {
   const priced = listings.filter((l) => l.price)
   if (priced.length === 0) return null
@@ -855,6 +885,10 @@ export default function Demo() {
     [listings],
   )
 
+  const queryBeds = useMemo(() => extractBedsFromQuery(query), [query])
+  const floor = useMemo(() => realisticFloor(queryBeds), [queryBeds])
+  const budgetLikelyTooLow = floor != null && budget > 0 && budget < floor
+
   return (
     <div
       className="min-h-screen"
@@ -964,6 +998,35 @@ export default function Demo() {
               </button>
             </div>
           </form>
+
+          {/* Budget realism warning */}
+          {budgetLikelyTooLow && floor != null && queryBeds != null && (
+            <div
+              className="mt-3 rounded-xl px-4 py-3 flex items-start sm:items-center gap-3 flex-col sm:flex-row"
+              style={{ backgroundColor: "#FFF8E1", border: `1px solid #F2D896` }}
+            >
+              <div className="flex items-start gap-2 flex-1">
+                <span className="text-base shrink-0 leading-none mt-0.5" aria-hidden>⚠️</span>
+                <div className="text-[13px] leading-relaxed" style={{ color: "#5C4400" }}>
+                  <span className="font-bold">Heads up:</span>{" "}
+                  Typical{" "}
+                  {queryBeds === 0 ? "studios" : `${queryBeds}-bedroom rentals`}
+                  {" "}in {city} start around{" "}
+                  <strong style={{ color: "#3D2D00" }}>${floor.toLocaleString()}/month</strong>.{" "}
+                  Your budget of <strong style={{ color: "#3D2D00" }}>${budget.toLocaleString()}</strong>{" "}
+                  may return very few or zero matches.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBudget(floor)}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-all hover:brightness-110 active:scale-[0.98]"
+                style={{ backgroundColor: "#5C4400", color: "white", fontFamily: FONT_HEADING }}
+              >
+                Use ${floor.toLocaleString()}
+              </button>
+            </div>
+          )}
 
           {/* Suggestion chips */}
           <div className="mt-4 flex flex-wrap gap-2 items-center">
