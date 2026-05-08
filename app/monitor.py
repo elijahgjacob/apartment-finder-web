@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 
 from .config import (
+    BLOCKED_DOMAINS,
     CITY_SHORT, DEFAULT_BUDGET, SEARCH_BEDROOMS, LISTING_SITES,
     MONITOR_FREQUENCY, MONITOR_PROCESSOR, MONITOR_INCLUDE_BACKFILL,
 )
@@ -75,10 +76,17 @@ _MONITOR_OUTPUT_SCHEMA = {
 
 def _build_query() -> str:
     beds = SEARCH_BEDROOMS or "3"
+    excluded = ""
+    if BLOCKED_DOMAINS:
+        excluded = (
+            f" Exclude any results from these domains: {', '.join(BLOCKED_DOMAINS)}. "
+            f"Prefer the original landlord, broker, or property-management website."
+        )
     return (
         f"New {beds}-bedroom apartment listings for rent in {CITY_SHORT} "
         f"under ${DEFAULT_BUDGET} per month, posted on major rental aggregator "
-        f"sites (Zillow, Apartments.com, Redfin, Trulia, Craigslist, HotPads, Rent.com)."
+        f"sites (Redfin, Trulia, Craigslist, HotPads, Rent.com, Compass, Realtor.com)."
+        + excluded
     )
 
 
@@ -257,6 +265,11 @@ def _event_to_listing(event: dict) -> dict | None:
 
     # Reject aggregator search-result pages.
     if re.search(r"/(apartments|rentals)(/?$|\?|/\d+\-bedrooms)", url, re.IGNORECASE):
+        return None
+
+    # Hard reject: explicitly blocked domains.
+    u = url.lower()
+    if any(d in u for d in BLOCKED_DOMAINS):
         return None
 
     title = (content.get("title") or "").strip()

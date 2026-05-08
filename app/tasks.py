@@ -12,7 +12,13 @@ from typing import AsyncIterator
 
 import httpx
 
-from .config import CITY, CITY_SHORT, LISTING_SITES
+from .config import (
+    BLOCKED_DOMAINS,
+    CITY, CITY_SHORT,
+    FINDALL_GENERATOR,
+    LISTING_SITES,
+    TASK_SPAM_PROCESSOR,
+)
 from .db import get_db
 from .parallel_client import ParallelClient
 
@@ -101,6 +107,15 @@ def _detect_source(url: str) -> str:
         if domain in url:
             return domain.split(".")[0]
     return "web"
+
+
+def is_blocked_url(url: str) -> bool:
+    """Reject URLs from any domain we explicitly don't want results from
+    (currently zillow.com + apartments.com — see config.BLOCKED_DOMAINS)."""
+    if not url:
+        return False
+    u = url.lower()
+    return any(d in u for d in BLOCKED_DOMAINS)
 
 
 def _parse_int(s: str | None) -> int | None:
@@ -242,6 +257,10 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
     output = candidate.get("output") or {}
 
     if not url:
+        return None
+
+    # Hard reject: explicitly blocked domains (zillow.com / apartments.com).
+    if is_blocked_url(url):
         return None
 
     # Post-filter: URL points at an aggregate / category page, not a unit.
@@ -555,7 +574,7 @@ async def _score_spam(client: ParallelClient, listing: dict, timeout: float = 90
                 "source": listing.get("source"),
             },
             output_schema=_SPAM_SCHEMA,
-            processor="base",
+            processor=TASK_SPAM_PROCESSOR,
         )
         run_id = run.get("run_id")
         if not run_id:
@@ -607,13 +626,23 @@ def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
     runs (FindAll can't always verify them from page text). We rely on
     enrichments for the actual data, and post-filter in _candidate_to_listing
     for hard rejections (bad URLs, missing addresses, wrong bedroom count)."""
+    blocked_clause = ""
+    if BLOCKED_DOMAINS:
+        listed = ", ".join(BLOCKED_DOMAINS)
+        blocked_clause = (
+            f" Reject any candidate whose URL is on these domains: {listed}. "
+            f"Prefer the original landlord's, broker's, or property-management website "
+            f"over those aggregators."
+        )
     return [
         {"name": "is_rental_listing",
          "description": (
              f"The page is an individual rental property listing in or near {CITY_SHORT}. "
              "It advertises a specific unit available to rent. "
-             "Not a search results page, not a news article, not a category index. "
-             "If the page describes a real property in the target area, mark this matched."
+             "Not a search results page, not a news article, not a category index."
+             + blocked_clause +
+             " If the page describes a real property in the target area "
+             "(and is not on a blocked domain), mark this matched."
          )},
         {"name": "fits_budget",
          "description": (
@@ -818,7 +847,7 @@ async def run_task(task: Task) -> None:
                 entity_type="apartment rental listings",
                 match_conditions=_match_conditions(task.min_beds, task.budget),
                 enrichments=_enrichments(),
-                generator="core",
+                generator=FINDALL_GENERATOR,
                 match_limit=25,
             )
             findall_id = run_data.get("findall_id") or run_data.get("run_id")
