@@ -53,14 +53,6 @@ const SearchIcon = ({ size = 18, color = Z.textFaint }: { size?: number; color?:
   </svg>
 )
 
-const HouseIcon = ({ size = 56, color = Z.textFaint }: { size?: number; color?: string }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M8 28 32 8l24 20" />
-    <path d="M14 26v28h36V26" />
-    <path d="M26 54V36h12v18" />
-  </svg>
-)
-
 const CheckIcon = ({ size = 11, color = Z.blue }: { size?: number; color?: string }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="20 6 9 17 4 12" />
@@ -86,23 +78,6 @@ function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`
-}
-
-function imageGradient(id: string): string {
-  // Deterministic neutral gradient per listing — soft, professional palette
-  // (avoids garish hues that would clash with brand). Cycles through 6 muted
-  // pairs that feel like dawn / dusk over a city skyline.
-  const palette = [
-    ["#E8F0FE", "#C9D7F5"], // sky
-    ["#F0E9F8", "#D4C5E8"], // dusk
-    ["#E6F1ED", "#B9D4C7"], // sage
-    ["#FBE9E2", "#F2C9B5"], // peach
-    ["#EAEEF4", "#C4CCD8"], // slate
-    ["#F4EFE6", "#D9C9AE"], // sand
-  ]
-  const idx = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0) % palette.length
-  const [a, b] = palette[idx]
-  return `linear-gradient(135deg, ${a} 0%, ${b} 100%)`
 }
 
 function avgPrice(listings: Listing[]): number | null {
@@ -175,6 +150,13 @@ function Citations({ listing }: { listing: Listing }) {
   )
 }
 
+function scorePalette(score: number | null | undefined) {
+  if (score == null) return { fg: Z.textFaint, bg: Z.bgSubtle, border: Z.border }
+  if (score >= 70) return { fg: Z.green, bg: Z.greenSoft, border: "#BAE0C2" }
+  if (score >= 45) return { fg: Z.amber, bg: "#FFF4E0", border: "#F7D9A8" }
+  return { fg: Z.red, bg: Z.redSoft, border: "#F4B5B5" }
+}
+
 function ListingCard({
   l, idx, city, isNew, isHovered, onHover, onLeave,
 }: {
@@ -184,12 +166,13 @@ function ListingCard({
   onLeave?: () => void
 }) {
   const href = l.url ?? `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
+  const scoreP = scorePalette(l.score)
   return (
     <article
       data-listing-id={l.id}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className={`group rounded-2xl overflow-hidden flex flex-col sm:flex-row transition-all duration-200 hover:-translate-y-0.5 ${isNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
+      className={`group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 ${isNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
       style={{
         backgroundColor: Z.bgCard,
         border: `1px solid ${isNew || isHovered ? Z.blueBorder : Z.border}`,
@@ -197,97 +180,99 @@ function ListingCard({
           ? `0 0 0 4px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
           : isHovered
             ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
-            : `0 1px 2px rgba(15,17,21,0.04), 0 0 0 1px rgba(15,17,21,0.01)`,
+            : `0 1px 2px rgba(15,17,21,0.04)`,
+        // Subtle accent stripe on the leading edge based on score
+        borderLeft: `3px solid ${scoreP.border}`,
       }}
     >
-      {/* Visual block (placeholder: deterministic gradient + house icon) */}
-      <div
-        className="relative w-full sm:w-44 h-32 sm:h-auto shrink-0 flex items-center justify-center"
-        style={{ background: imageGradient(l.id) }}
-      >
-        <HouseIcon size={48} color="rgba(0,0,0,0.18)" />
+      {/* Top row: pos · neighborhood · source · status */}
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
         <span
-          className="absolute top-2 left-2 text-[10px] font-bold w-6 h-6 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "white", color: Z.text, boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
+          className="text-[11px] font-bold w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+          style={{ backgroundColor: Z.bgSubtle, color: Z.textMid }}
         >
           {idx + 1}
         </span>
-        {isNew && (
-          <span
-            className="absolute top-2 right-2 text-[9px] uppercase font-bold px-2 py-0.5 rounded animate-pulse"
-            style={{ backgroundColor: Z.blue, color: "white", letterSpacing: "0.08em" }}
-          >
-            new
+        {l.neighborhood && (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: Z.textMid }}>
+            <PinIcon size={10} color={Z.textFaint} />
+            {l.neighborhood}
           </span>
         )}
+        <span
+          className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+          style={{ backgroundColor: Z.bgSubtle, color: Z.textMid }}
+        >
+          {l.source}
+        </span>
         {l.score != null && (
           <span
-            className="absolute bottom-2 left-2 text-[10px] font-bold px-2 py-0.5 rounded"
-            style={{ backgroundColor: "rgba(255,255,255,0.92)", color: Z.blueDarker, letterSpacing: "0.04em" }}
+            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+            style={{ backgroundColor: scoreP.bg, color: scoreP.fg, border: `1px solid ${scoreP.border}` }}
+            title="Match score: recency + price fit + distance to reference point"
           >
             {l.score}/100
           </span>
         )}
+        {isNew && (
+          <span
+            className="text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-[0.08em] animate-pulse"
+            style={{ backgroundColor: Z.blue, color: "white" }}
+          >
+            new
+          </span>
+        )}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0 p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              {l.neighborhood && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: Z.textMid }}>
-                  <PinIcon size={10} color={Z.textFaint} />
-                  {l.neighborhood}
-                </span>
-              )}
-              <span
-                className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-wider"
-                style={{ backgroundColor: Z.bgSubtle, color: Z.textMid }}
-              >
-                {l.source}
-              </span>
-            </div>
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[17px] font-bold hover:underline block leading-tight"
-              style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}
-            >
-              {l.address ?? l.title ?? "—"}
-            </a>
-            <div className="text-sm mt-2 flex flex-wrap items-center gap-x-2" style={{ color: Z.textMid }}>
-              <strong style={{ color: Z.text, fontWeight: 600 }}>{l.bedrooms ?? "?"}</strong>
-              <span>bd</span>
-              {l.bathrooms != null && (<><span style={{ color: Z.textFaint }}>·</span><strong style={{ color: Z.text, fontWeight: 600 }}>{l.bathrooms}</strong><span>ba</span></>)}
-              {l.sqft != null && (<><span style={{ color: Z.textFaint }}>·</span><strong style={{ color: Z.text, fontWeight: 600 }}>{l.sqft.toLocaleString()}</strong><span>sqft</span></>)}
-              {l.has_parking && (<><span style={{ color: Z.textFaint }}>·</span><span>parking</span></>)}
-              {l.has_laundry && (<><span style={{ color: Z.textFaint }}>·</span><span>laundry</span></>)}
-            </div>
-            {(l.details?.available_date || l.details?.lease_term || l.details?.pet_policy) && (
-              <div className="text-[12px] mt-2 flex flex-wrap gap-x-4 gap-y-1" style={{ color: Z.textMid }}>
-                {l.details?.available_date && <span><span style={{ color: Z.textFaint }}>Available:</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.available_date}</strong></span>}
-                {l.details?.lease_term && <span><span style={{ color: Z.textFaint }}>Lease:</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.lease_term}</strong></span>}
-                {l.details?.pet_policy && <span><span style={{ color: Z.textFaint }}>Pets:</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.pet_policy}</strong></span>}
-              </div>
-            )}
-            <MatchPills listing={l} />
-            <Citations listing={l} />
+      {/* Headline + price */}
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[18px] font-bold hover:underline block leading-tight flex-1 min-w-0 truncate"
+          style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}
+        >
+          {l.address ?? l.title ?? "—"}
+        </a>
+        <div className="text-right shrink-0">
+          <div
+            className="text-[26px] font-bold leading-none"
+            style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.025em" }}
+          >
+            {l.price ? `$${l.price.toLocaleString()}` : "—"}
           </div>
-          <div className="text-right shrink-0">
-            <div
-              className="text-[28px] font-bold leading-none"
-              style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.025em" }}
-            >
-              {l.price ? `$${l.price.toLocaleString()}` : "—"}
+          {l.price && (
+            <div className="text-[10px] mt-1 uppercase tracking-wider font-semibold" style={{ color: Z.textFaint }}>
+              per month
             </div>
-            {l.price && (
-              <div className="text-[11px] mt-1" style={{ color: Z.textFaint }}>per month</div>
-            )}
-          </div>
+          )}
         </div>
       </div>
+
+      {/* Specs row */}
+      <div className="text-sm flex flex-wrap items-center gap-x-2 mb-2" style={{ color: Z.textMid }}>
+        <strong style={{ color: Z.text, fontWeight: 600 }}>{l.bedrooms ?? "?"}</strong>
+        <span>bd</span>
+        {l.bathrooms != null && (<><span style={{ color: Z.textFaint }}>·</span><strong style={{ color: Z.text, fontWeight: 600 }}>{l.bathrooms}</strong><span>ba</span></>)}
+        {l.sqft != null && (<><span style={{ color: Z.textFaint }}>·</span><strong style={{ color: Z.text, fontWeight: 600 }}>{l.sqft.toLocaleString()}</strong><span>sqft</span></>)}
+        {l.has_parking && (<><span style={{ color: Z.textFaint }}>·</span><span>parking</span></>)}
+        {l.has_laundry && (<><span style={{ color: Z.textFaint }}>·</span><span>laundry</span></>)}
+      </div>
+
+      {/* Renter-facing detail row */}
+      {(l.details?.available_date || l.details?.lease_term || l.details?.pet_policy || l.details?.utilities_included || l.details?.is_furnished) && (
+        <div className="text-[12px] flex flex-wrap gap-x-4 gap-y-1 mb-1" style={{ color: Z.textMid }}>
+          {l.details?.available_date && <span><span style={{ color: Z.textFaint }}>Available</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.available_date}</strong></span>}
+          {l.details?.lease_term && <span><span style={{ color: Z.textFaint }}>Lease</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.lease_term}</strong></span>}
+          {l.details?.pet_policy && <span><span style={{ color: Z.textFaint }}>Pets</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.pet_policy}</strong></span>}
+          {l.details?.utilities_included && <span><span style={{ color: Z.textFaint }}>Utilities</span> <strong style={{ color: Z.text, fontWeight: 600 }}>{l.details.utilities_included}</strong></span>}
+          {l.details?.is_furnished === true && <span><strong style={{ color: Z.text, fontWeight: 600 }}>Furnished</strong></span>}
+        </div>
+      )}
+
+      <MatchPills listing={l} />
+      <Citations listing={l} />
     </article>
   )
 }
