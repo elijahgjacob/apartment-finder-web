@@ -110,6 +110,39 @@ function realisticFloor(beds: number | null): number | null {
   return RENT_FLOORS_SF[beds] ?? RENT_FLOORS_SF[Math.min(beds, 5)] ?? null
 }
 
+function extractBudgetFromQuery(query: string): number | null {
+  // 1. Explicit $-prefixed amount, optional 'k' suffix: "$7000", "$7,500", "$7k", "$7.5k"
+  const dollar = query.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(k)?/i)
+  if (dollar) {
+    let n = parseFloat(dollar[1].replace(/,/g, ""))
+    if (dollar[2]) n *= 1000
+    if (n >= 500 && n <= 30000) return Math.round(n)
+  }
+  // 2. Contextual phrasing: "under 7000", "below $4500", "max 5k", "up to 6000"
+  const ctx = query.match(
+    /\b(?:under|below|max(?:imum)?|less\s+than|up\s+to|cheaper\s+than|<=?)\s+\$?([\d,]+(?:\.\d+)?)\s*(k)?\b/i,
+  )
+  if (ctx) {
+    let n = parseFloat(ctx[1].replace(/,/g, ""))
+    if (ctx[2]) n *= 1000
+    if (n >= 500 && n <= 30000) return Math.round(n)
+  }
+  // 3. Bare 'k' price: "7k", "5.5k a month"
+  const kBare = query.match(/(?<![\d$])(\d+(?:\.\d+)?)\s*k\b/i)
+  if (kBare) {
+    const n = parseFloat(kBare[1]) * 1000
+    if (n >= 500 && n <= 30000) return Math.round(n)
+  }
+  return null
+}
+
+function defaultBudgetForBeds(beds: number | null): number {
+  if (beds == null) return 7500
+  // Floor + ~30% headroom so the search has somewhere to land
+  const floor = realisticFloor(beds)
+  return floor != null ? Math.round(floor * 1.3 / 250) * 250 : 7500
+}
+
 function avgPrice(listings: Listing[]): number | null {
   const priced = listings.filter((l) => l.price)
   if (priced.length === 0) return null
@@ -717,7 +750,6 @@ export default function Demo() {
   const city = config?.cityShort ?? "San Francisco"
 
   const [query, setQuery] = useState("")
-  const [budget, setBudget] = useState<number>(config?.defaultBudget ?? 7500)
   const [reasoning, setReasoning] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [listings, setListings] = useState<Listing[]>([])
@@ -776,9 +808,15 @@ export default function Demo() {
     return () => window.clearTimeout(t)
   }, [done, hydrateFromDb])
 
-  useEffect(() => {
-    if (config?.defaultBudget && budget === 7500) setBudget(config.defaultBudget)
-  }, [config?.defaultBudget, budget])
+  // Parse the budget + bed count out of the query as the user types.
+  // The effective budget passed to the API is whichever the user typed
+  // (e.g. "under $5000"), or a sensible default keyed off bed count.
+  const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
+  const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
+  const effectiveBudget = useMemo(
+    () => parsedBudget ?? defaultBudgetForBeds(parsedBeds) ?? config?.defaultBudget ?? 7500,
+    [parsedBudget, parsedBeds, config?.defaultBudget],
+  )
 
   const startSearch = useCallback(async (q: string, opts: { keepListings?: boolean } = {}) => {
     if (!q.trim()) return
@@ -794,7 +832,7 @@ export default function Demo() {
       const res = await fetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, budget }),
+        body: JSON.stringify({ query: q, budget: effectiveBudget }),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -832,7 +870,7 @@ export default function Demo() {
       setStreaming(false)
       setError(err instanceof Error ? err.message : "Search failed")
     }
-  }, [budget, done])
+  }, [effectiveBudget, done])
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -885,9 +923,11 @@ export default function Demo() {
     [listings],
   )
 
-  const queryBeds = useMemo(() => extractBedsFromQuery(query), [query])
-  const floor = useMemo(() => realisticFloor(queryBeds), [queryBeds])
-  const budgetLikelyTooLow = floor != null && budget > 0 && budget < floor
+  // Realism check is only meaningful when the user EXPLICITLY typed a budget
+  // (not when we're falling back to a default). Otherwise we'd nag every
+  // suggestion-chip click that didn't include a price.
+  const floor = useMemo(() => realisticFloor(parsedBeds), [parsedBeds])
+  const budgetLikelyTooLow = floor != null && parsedBudget != null && parsedBudget < floor
 
   return (
     <div
@@ -976,31 +1016,51 @@ export default function Demo() {
                 autoFocus
               />
             </div>
-            <div className="flex gap-2">
-              <input
-                type="number"
-                value={budget}
-                onChange={(e) => setBudget(parseInt(e.target.value) || 0)}
-                step={250}
-                min={500}
-                max={30000}
-                className="bg-transparent px-3 py-3 w-28 text-base font-semibold text-right focus:outline-none border-l"
-                style={{ color: Z.text, borderColor: Z.borderSoft, fontFamily: FONT_HEADING }}
-                title="Max monthly rent"
-              />
-              <button
-                type="submit"
-                disabled={!query.trim()}
-                className="px-7 py-3 rounded-xl font-bold text-sm text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
-                style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING, letterSpacing: "0.01em" }}
-              >
-                {streaming ? "Searching…" : "Search"}
-              </button>
-            </div>
+            <button
+              type="submit"
+              disabled={!query.trim()}
+              className="px-7 py-3 rounded-xl font-bold text-sm text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
+              style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING, letterSpacing: "0.01em" }}
+            >
+              {streaming ? "Searching…" : "Search"}
+            </button>
           </form>
 
-          {/* Budget realism warning */}
-          {budgetLikelyTooLow && floor != null && queryBeds != null && (
+          {/* Parsed criteria — visible feedback that the AI extracted intent */}
+          {(parsedBeds != null || parsedBudget != null) && (
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: Z.textFaint }}>
+                Parsed
+              </span>
+              {parsedBeds != null && (
+                <span
+                  className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
+                >
+                  {parsedBeds === 0 ? "studio" : `${parsedBeds} bd`}
+                </span>
+              )}
+              {parsedBudget != null ? (
+                <span
+                  className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
+                >
+                  ≤ ${parsedBudget.toLocaleString()}/mo
+                </span>
+              ) : (
+                <span
+                  className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+                  style={{ backgroundColor: Z.bgSubtle, color: Z.textMid, border: `1px solid ${Z.border}` }}
+                  title="No budget detected in query — using a typical default for this bedroom count"
+                >
+                  default ${effectiveBudget.toLocaleString()}/mo
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Budget realism warning — only when the user explicitly typed a budget */}
+          {budgetLikelyTooLow && floor != null && parsedBeds != null && parsedBudget != null && (
             <div
               className="mt-3 rounded-xl px-4 py-3 flex items-start sm:items-center gap-3 flex-col sm:flex-row"
               style={{ backgroundColor: "#FFF8E1", border: `1px solid #F2D896` }}
@@ -1010,20 +1070,27 @@ export default function Demo() {
                 <div className="text-[13px] leading-relaxed" style={{ color: "#5C4400" }}>
                   <span className="font-bold">Heads up:</span>{" "}
                   Typical{" "}
-                  {queryBeds === 0 ? "studios" : `${queryBeds}-bedroom rentals`}
+                  {parsedBeds === 0 ? "studios" : `${parsedBeds}-bedroom rentals`}
                   {" "}in {city} start around{" "}
                   <strong style={{ color: "#3D2D00" }}>${floor.toLocaleString()}/month</strong>.{" "}
-                  Your budget of <strong style={{ color: "#3D2D00" }}>${budget.toLocaleString()}</strong>{" "}
-                  may return very few or zero matches.
+                  Your query asks for <strong style={{ color: "#3D2D00" }}>under ${parsedBudget.toLocaleString()}</strong>{" "}
+                  — likely zero matches.
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setBudget(floor)}
+                onClick={() => {
+                  // Replace any "<= $X / under $X / $X" in the query with the floor.
+                  const newQuery = query
+                    .replace(/\$\s*[\d,]+(?:\.\d+)?\s*k?/gi, `$${floor.toLocaleString()}`)
+                    .replace(/\b(?:under|below|max(?:imum)?|less\s+than|up\s+to|cheaper\s+than)\s+\$?[\d,]+(?:\.\d+)?\s*k?/gi,
+                      `under $${floor.toLocaleString()}`)
+                  setQuery(newQuery === query ? `${query.trim()} under $${floor.toLocaleString()}` : newQuery)
+                }}
                 className="text-xs font-bold px-3 py-1.5 rounded-lg shrink-0 transition-all hover:brightness-110 active:scale-[0.98]"
                 style={{ backgroundColor: "#5C4400", color: "white", fontFamily: FONT_HEADING }}
               >
-                Use ${floor.toLocaleString()}
+                Bump to ${floor.toLocaleString()}
               </button>
             </div>
           )}
