@@ -104,6 +104,208 @@ function Block({ children }: { children: React.ReactNode }) {
   )
 }
 
+// ── Architecture diagram ────────────────────────────────────────────────
+
+type DiagBox = {
+  x: number; y: number; w: number; h: number
+  title: string
+  sub?: string
+  bullets?: string[]
+  accent?: "blue" | "amber" | "neutral"
+  emphasis?: boolean
+}
+
+function ArchDiagram() {
+  // Layout constants
+  const W = 880
+  const H = 940
+  const COL_L = 80
+  const COL_R = 540
+  const COL_C_LEFT = COL_L + 110          // center of left col box (220 wide)
+  const COL_C_RIGHT = COL_R + 110
+  const COL_C = W / 2
+
+  const boxes: DiagBox[] = [
+    // Header strip
+    { x: COL_L,  y: 24,  w: 220, h: 36, title: "User search",       accent: "blue", emphasis: true },
+    { x: COL_R,  y: 24,  w: 220, h: 36, title: "Background watch",  accent: "blue", emphasis: true },
+
+    // User search column
+    { x: COL_L,  y: 90,  w: 220, h: 50, title: "POST /api/tasks",   sub: "natural-language query" },
+    { x: COL_L,  y: 170, w: 220, h: 60, title: "FindAll create",     sub: "generator: pro" },
+    { x: COL_L,  y: 260, w: 220, h: 70, title: "Match conditions",   sub: "is_rental_listing · fits_budget\n+ 18 enrichments" },
+    { x: COL_L,  y: 360, w: 220, h: 168, title: "_candidate_to_listing", bullets: [
+      "block-domain guard",
+      "junk-page filter",
+      "plausibility floors",
+      "address ≠ price guard",
+      "bedroom min post-filter",
+      "enrichments → details",
+    ]},
+    { x: COL_L,  y: 558, w: 220, h: 60, title: "Task API (spam)",    sub: "processor: pro · 5 fact booleans" },
+
+    // Background watch column
+    { x: COL_R,  y: 90,  w: 220, h: 50, title: "Parallel Monitor",  sub: "1h tick · processor: base" },
+    { x: COL_R,  y: 170, w: 220, h: 60, title: "GET /events",        sub: "every 60s, local poll loop" },
+    { x: COL_R,  y: 260, w: 220, h: 70, title: "_event_to_listing",  sub: "block-domain · junk-page\nbounds checks" },
+
+    // Convergence
+    { x: 330,    y: 678, w: 220, h: 60, title: "SQLite catalog",     accent: "amber", emphasis: true },
+    { x: 330,    y: 768, w: 220, h: 50, title: "GET /api/listings",  sub: "client poll every 30s" },
+    { x: 330,    y: 848, w: 220, h: 50, title: "/demo UI",           accent: "blue", emphasis: true },
+  ]
+
+  type Arrow = { x1: number; y1: number; x2: number; y2: number; dashed?: boolean }
+  const arrows: Arrow[] = [
+    // Left column down-chain
+    { x1: COL_C_LEFT, y1: 60,  x2: COL_C_LEFT, y2: 88 },
+    { x1: COL_C_LEFT, y1: 140, x2: COL_C_LEFT, y2: 168 },
+    { x1: COL_C_LEFT, y1: 230, x2: COL_C_LEFT, y2: 258 },
+    { x1: COL_C_LEFT, y1: 330, x2: COL_C_LEFT, y2: 358 },
+    { x1: COL_C_LEFT, y1: 528, x2: COL_C_LEFT, y2: 556 },
+
+    // Right column down-chain
+    { x1: COL_C_RIGHT, y1: 60,  x2: COL_C_RIGHT, y2: 88 },
+    { x1: COL_C_RIGHT, y1: 140, x2: COL_C_RIGHT, y2: 168 },
+    { x1: COL_C_RIGHT, y1: 230, x2: COL_C_RIGHT, y2: 258 },
+
+    // Convergence into SQLite (curved with mid-bend shown as polyline-style L)
+    { x1: COL_C_LEFT,  y1: 618, x2: COL_C_LEFT,  y2: 660 },
+    { x1: COL_C_RIGHT, y1: 330, x2: COL_C_RIGHT, y2: 660 },
+    { x1: COL_C_LEFT,  y1: 660, x2: COL_C,        y2: 660 },
+    { x1: COL_C_RIGHT, y1: 660, x2: COL_C,        y2: 660 },
+    { x1: COL_C,       y1: 660, x2: COL_C,        y2: 676 },
+
+    // Catalog → API → UI
+    { x1: COL_C, y1: 738, x2: COL_C, y2: 766 },
+    { x1: COL_C, y1: 818, x2: COL_C, y2: 846 },
+  ]
+
+  const fillFor = (b: DiagBox) => {
+    if (b.emphasis) return Z.blueSoft
+    if (b.accent === "amber") return "#FFF4E0"
+    return Z.bgCard
+  }
+  const strokeFor = (b: DiagBox) => {
+    if (b.accent === "amber") return "#F7D9A8"
+    if (b.emphasis) return Z.blueBorder
+    return Z.border
+  }
+  const titleColorFor = (b: DiagBox) => {
+    if (b.emphasis) return Z.blueDarker
+    if (b.accent === "amber") return "#5C4400"
+    return Z.text
+  }
+
+  return (
+    <div style={{ overflowX: "auto", marginBottom: "1rem" }}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{
+          display: "block",
+          maxWidth: "100%",
+          height: "auto",
+          backgroundColor: Z.bgCard,
+          border: `1px solid ${Z.border}`,
+          borderRadius: 12,
+          fontFamily: FONT_HEADING,
+        }}
+      >
+        <defs>
+          <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={Z.blueDark} />
+          </marker>
+          <filter id="boxShadow" x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#0E1117" floodOpacity="0.06" />
+          </filter>
+        </defs>
+
+        {/* Column lane backgrounds (subtle) */}
+        <rect x={COL_L - 16}   y={12}  width={252}  height={620} rx={16} fill={Z.bgPage} opacity={0.6} />
+        <rect x={COL_R - 16}   y={12}  width={252}  height={325} rx={16} fill={Z.bgPage} opacity={0.6} />
+
+        {/* Lane labels */}
+        <text x={COL_C_LEFT}  y={6}  textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">
+          USER-DRIVEN
+        </text>
+        <text x={COL_C_RIGHT} y={6}  textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">
+          ALWAYS-ON
+        </text>
+
+        {/* Arrows */}
+        {arrows.map((a, i) => {
+          const isHorizontal = Math.abs(a.y1 - a.y2) < 1
+          const mark = isHorizontal ? undefined : "url(#arrowhead)"
+          return (
+            <line
+              key={i}
+              x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2}
+              stroke={Z.blueDark}
+              strokeWidth={1.5}
+              strokeDasharray={a.dashed ? "4 3" : undefined}
+              markerEnd={mark}
+            />
+          )
+        })}
+
+        {/* Boxes */}
+        {boxes.map((b, i) => {
+          const titleY = b.bullets ? b.y + 22 : (b.sub ? b.y + 22 : b.y + b.h / 2 + 4)
+          return (
+            <g key={i} filter="url(#boxShadow)">
+              <rect
+                x={b.x} y={b.y}
+                width={b.w} height={b.h}
+                rx={10}
+                fill={fillFor(b)}
+                stroke={strokeFor(b)}
+                strokeWidth={1}
+              />
+              <text
+                x={b.x + b.w / 2}
+                y={titleY}
+                textAnchor="middle"
+                fontSize={b.emphasis ? 13 : 13}
+                fontWeight={700}
+                fill={titleColorFor(b)}
+                letterSpacing="-0.01em"
+              >
+                {b.title}
+              </text>
+              {b.sub && b.sub.split("\n").map((line, j) => (
+                <text
+                  key={j}
+                  x={b.x + b.w / 2}
+                  y={titleY + 18 + j * 14}
+                  textAnchor="middle"
+                  fontSize="11"
+                  fill={Z.textMid}
+                  fontFamily={FONT_MONO}
+                >
+                  {line}
+                </text>
+              ))}
+              {b.bullets && b.bullets.map((bullet, j) => (
+                <text
+                  key={j}
+                  x={b.x + 14}
+                  y={b.y + 46 + j * 19}
+                  fontSize="11"
+                  fill={Z.textMid}
+                  fontFamily={FONT_MONO}
+                >
+                  · {bullet}
+                </text>
+              ))}
+            </g>
+          )
+        })}
+      </svg>
+    </div>
+  )
+}
+
 function Card({ children, accent }: { children: React.ReactNode; accent?: string }) {
   return (
     <div
@@ -268,35 +470,11 @@ export default function Docs() {
             </P>
 
             <H2 id="pipeline">Pipeline</H2>
-            <Block>{`User search                              Background watch
-─────────────────────────                ─────────────────────────
-POST /api/tasks                          Parallel Monitor (1h tick)
-   │                                        │
-   │  Build objective + match_conditions    │  Hosted query
-   │  + 18 enrichments + min_beds gate      │  (excludes blocked domains)
-   ▼                                        ▼
-FindAll create (generator: pro)          GET /v1/monitors/{id}/events
-   │  poll until "completed"                │  every 60s from local loop
-   ▼                                        ▼
-Matched candidates                       Event payload (with output schema)
-   │                                        │
-   │  _candidate_to_listing()               │  _event_to_listing()
-   │   ├─ block-domain guard                │   ├─ block-domain guard
-   │   ├─ junk-page URL filter              │   ├─ junk-page URL filter
-   │   ├─ plausibility floors               │   ├─ price > 500 / < 50k
-   │   ├─ address ≠ price guard             │
-   │   └─ enrichment fields → details       │
-   ▼                                        ▼
-Spam-score (Task API, processor: pro)    (skip — Monitor adds fewer)
-   │                                        │
-   ▼                                        ▼
-SQLite listings                          SQLite listings
-   │                                        │
-   └────────────┬───────────────────────────┘
-                ▼
-        /api/listings (every 30s)
-                ▼
-            /demo UI`}</Block>
+            <P>
+              Two flows feed the SQLite catalog. Both pass through their own
+              guard chain before insert; the UI hydrates from the merged set.
+            </P>
+            <ArchDiagram />
 
             <H2 id="discovery">Discovery</H2>
             <P>
