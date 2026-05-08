@@ -11,6 +11,8 @@ export type ListingDetails = {
   via_monitor?: boolean | null
   monitor_event_date?: string | null
   monitor_summary?: string | null
+  is_currently_active?: boolean | null
+  days_on_market?: number | null
 }
 
 export type MatchCondition = {

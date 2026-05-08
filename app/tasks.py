@@ -355,6 +355,25 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
     phone = _output_val(output, "contact_phone")
     email = _output_val(output, "contact_email")
 
+    # Freshness signals from the API
+    is_active_str = _output_val(output, "is_currently_active")
+    is_currently_active: bool | None = None
+    if is_active_str is not None:
+        sl = is_active_str.strip().lower()
+        if sl in ("yes", "true", "active", "available"):
+            is_currently_active = True
+        elif sl in ("no", "false", "leased", "rented", "pending", "unavailable", "removed", "off-market"):
+            is_currently_active = False
+
+    days_str = _output_val(output, "days_on_market")
+    days_on_market: int | None = None
+    if days_str is not None:
+        try:
+            n = int(re.sub(r"\D", "", days_str) or "0")
+            days_on_market = n if 0 <= n <= 3650 else None
+        except ValueError:
+            pass
+
     # Renter-facing details — stored as JSON, surfaced on the card.
     details = {
         "available_date": _output_val(output, "available_date"),
@@ -367,6 +386,8 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
         "contact_email": email,
         "parking_type": parking_type,
         "laundry_type": laundry_type,
+        "is_currently_active": is_currently_active,
+        "days_on_market": days_on_market,
     }
     # Drop empty keys so the JSON stays small.
     details = {k: v for k, v in details.items() if v not in (None, "", [], {})}
@@ -739,6 +760,26 @@ def _enrichments() -> list[dict]:
              "Action: extract an email address to inquire about the unit. "
              "Specifics: a single email address (e.g. 'leasing@example.com'). "
              "If no email is shown on the page, return an empty string."
+         )},
+        {"name": "is_currently_active",
+         "description": (
+             "Entity: the listing status of this rental unit. "
+             "Action: determine whether the unit is currently being actively marketed. "
+             "Specifics: return 'yes' if the page shows this unit is available to rent right now. "
+             "Return 'no' if the page indicates the unit is leased, rented, pending, off-market, "
+             "no-longer-available, or 'this listing has been removed'. "
+             "If the page is reachable and shows a normal listing without a removed/rented "
+             "status banner, return 'yes' (assume listed because it's findable)."
+         )},
+        {"name": "days_on_market",
+         "description": (
+             "Entity: this rental listing. "
+             "Action: extract how many days the unit has been on the market. "
+             "Specifics: an integer (e.g. '7'). Use 'days on market', 'listed N days ago', "
+             "'posted N days ago', or compute from a 'first listed' / 'posted on' date. "
+             "If only a posted date is shown without an explicit count, compute the days "
+             "between that date and today. "
+             "If no posted date or days-on-market is shown anywhere, return an empty string."
          )},
     ]
 

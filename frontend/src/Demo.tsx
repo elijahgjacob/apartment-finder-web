@@ -122,6 +122,43 @@ function realisticFloor(beds: number | null): number | null {
   return RENT_FLOORS_SF[beds] ?? RENT_FLOORS_SF[Math.min(beds, 5)] ?? null
 }
 
+// ── Staleness detection ─────────────────────────────────────────────────
+//
+// Aggregator sites (Zillow, Apartments.com, Trulia, HotPads, PadMapper,
+// RentCafe, Rent.com, Showcase) keep listings live in their index long
+// after the unit is rented. Direct/curated sources (Craigslist auto-
+// expires after ~45d; Redfin/Compass/Realtor are MLS-fed) self-clean.
+
+const AGGREGATOR_SOURCES = new Set([
+  "zillow", "apartments", "trulia", "hotpads",
+  "padmapper", "rentcafe", "rent", "showcase",
+])
+const STALE_AGGREGATOR_DAYS = 14
+const STALE_DIRECT_DAYS = 45
+
+function isStale(l: Listing): boolean {
+  // 1. API-derived signal (most reliable, when present).
+  const det = l.details ?? {}
+  if (det.is_currently_active === false) return true
+
+  const dom = (det as { days_on_market?: number }).days_on_market
+  if (typeof dom === "number" && Number.isFinite(dom)) {
+    const limit = AGGREGATOR_SOURCES.has(l.source) ? STALE_AGGREGATOR_DAYS : STALE_DIRECT_DAYS
+    return dom > limit
+  }
+
+  // 2. Heuristic fallback. Use the more authoritative timestamp we have:
+  //    monitor_event_date if the listing came from the always-on Monitor
+  //    (that's the date Parallel detected it as new), else fetched_at.
+  const referenceTs =
+    (det as { monitor_event_date?: string }).monitor_event_date ?? l.fetched_at ?? null
+  if (!referenceTs) return false
+  const ageDays = (Date.now() - new Date(referenceTs).getTime()) / 86_400_000
+  if (!Number.isFinite(ageDays)) return false
+  const limit = AGGREGATOR_SOURCES.has(l.source) ? STALE_AGGREGATOR_DAYS : STALE_DIRECT_DAYS
+  return ageDays > limit
+}
+
 function extractBudgetFromQuery(query: string): number | null {
   // 1. Explicit $-prefixed amount, optional 'k' suffix: "$7000", "$7,500", "$7k", "$7.5k"
   const dollar = query.match(/\$\s*([\d,]+(?:\.\d+)?)\s*(k)?/i)
@@ -320,6 +357,15 @@ function ListingCard({
             title="Discovered automatically by the always-on Parallel Monitor"
           >
             <span style={{ fontSize: "8px" }}>●</span> via monitor
+          </span>
+        )}
+        {isStale(l) && (
+          <span
+            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+            style={{ backgroundColor: "#FFF4E0", color: "#A66300", border: `1px solid #F7D9A8` }}
+            title="May be stale — aggregator listing past freshness window, or API marked it inactive."
+          >
+            stale?
           </span>
         )}
       </div>
@@ -816,7 +862,7 @@ function HiddenScoresToggle({ hiddenCount, showAll, onToggle }: { hiddenCount: n
     <button
       type="button"
       onClick={onToggle}
-      className="w-full mt-2 py-3 rounded-xl text-sm transition-colors hover:bg-white"
+      className="flex-1 py-3 rounded-xl text-sm transition-colors hover:bg-white"
       style={{
         backgroundColor: Z.bgCard,
         border: `1px dashed ${Z.border}`,
@@ -824,8 +870,30 @@ function HiddenScoresToggle({ hiddenCount, showAll, onToggle }: { hiddenCount: n
       }}
     >
       {showAll
-        ? <>← <span className="font-semibold">Hide poor-fit results</span> (only show strong fits ≥ 70/100)</>
-        : <>Show <strong style={{ color: Z.text }}>{hiddenCount}</strong> hidden {hiddenCount === 1 ? "result" : "results"} below the strong-fit bar →</>
+        ? <>← <span className="font-semibold">Hide poor-fit results</span> (strong fits only)</>
+        : <>Show <strong style={{ color: Z.text }}>{hiddenCount}</strong> below the strong-fit bar →</>
+      }
+    </button>
+  )
+}
+
+function StaleToggle({ hiddenCount, showStale, onToggle }: { hiddenCount: number; showStale: boolean; onToggle: () => void }) {
+  if (hiddenCount === 0 && !showStale) return null
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex-1 py-3 rounded-xl text-sm transition-colors hover:bg-white"
+      style={{
+        backgroundColor: Z.bgCard,
+        border: `1px dashed ${Z.border}`,
+        color: Z.textMid,
+      }}
+      title="Listings on aggregator sites (Zillow, Apartments.com, etc.) often stay live in the index after the unit has been rented. Hidden by default."
+    >
+      {showStale
+        ? <>← <span className="font-semibold">Re-hide likely-stale aggregator listings</span></>
+        : <>Show <strong style={{ color: Z.text }}>{hiddenCount}</strong> likely-stale aggregator {hiddenCount === 1 ? "listing" : "listings"} →</>
       }
     </button>
   )
@@ -1100,13 +1168,28 @@ export default function Demo() {
   )
 
   const [showAllScores, setShowAllScores] = useState(false)
-  const visibleListings = useMemo(
-    () => showAllScores
-      ? sortedListings
-      : sortedListings.filter((l) => (l.score ?? 0) >= STRONG_FIT_THRESHOLD),
+  const [showStale, setShowStale] = useState(false)
+
+  const filteredListings = useMemo(() => {
+    return sortedListings.filter((l) => {
+      if (!showAllScores && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
+      if (!showStale && isStale(l)) return false
+      return true
+    })
+  }, [sortedListings, showAllScores, showStale])
+
+  const hiddenLowScoreCount = useMemo(
+    () => sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l))).length,
+    [sortedListings, showStale],
+  )
+  const hiddenStaleCount = useMemo(
+    () => sortedListings.filter((l) => isStale(l) && (showAllScores || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
     [sortedListings, showAllScores],
   )
-  const hiddenCount = sortedListings.length - visibleListings.length
+
+  // Backwards-compat alias for the call sites below
+  const visibleListings = filteredListings
+  const hiddenCount = hiddenLowScoreCount
 
   // ── New-since-last-visit derivations ──
   const isNewSinceLastVisit = useCallback((l: Listing) => {
@@ -1382,11 +1465,18 @@ export default function Demo() {
                       onLeave={() => setHoveredId(null)}
                     />
                   ))}
-                  <HiddenScoresToggle
-                    hiddenCount={hiddenCount}
-                    showAll={showAllScores}
-                    onToggle={() => setShowAllScores((v) => !v)}
-                  />
+                  <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                    <HiddenScoresToggle
+                      hiddenCount={hiddenLowScoreCount}
+                      showAll={showAllScores}
+                      onToggle={() => setShowAllScores((v) => !v)}
+                    />
+                    <StaleToggle
+                      hiddenCount={hiddenStaleCount}
+                      showStale={showStale}
+                      onToggle={() => setShowStale((v) => !v)}
+                    />
+                  </div>
                 </div>
               </div>
             )}
