@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
 
@@ -99,6 +100,22 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=APP_TITLE, lifespan=lifespan)
+
+# CORS — allow the frontend deploy origin(s). Set ALLOWED_ORIGINS as a
+# comma-separated list, e.g.:
+#   ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173
+# Defaults to a permissive list for local development.
+_allowed = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in _allowed if o.strip()],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 # ── Auth ─────────────────────────────────────────────────────────────────

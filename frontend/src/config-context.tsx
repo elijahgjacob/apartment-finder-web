@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { api } from "./lib/api"
 import type { AppConfig } from "./types"
 
 type ConfigState = {
@@ -22,7 +23,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    fetch("/api/config")
+    fetch(api("/api/config"))
       .then(async (r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return (await r.json()) as AppConfig

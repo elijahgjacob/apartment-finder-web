@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
-import { useAppConfig, useConfigState } from "./config-context"
+import { useConfigState } from "./config-context"
 import { ZillowMap } from "./components/zillow-map"
+import { api } from "./lib/api"
 import type { AppConfig, Listing } from "./types"
 
 // Parallel Web Systems palette. Per parallel-assets/README.md:
@@ -971,7 +972,6 @@ function DemoApp({ config }: { config: AppConfig }) {
 
   const [view, setView] = useState<ViewMode>("list")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
-  const [hydrated, setHydrated] = useState(false)
   const cardListRef = useRef<HTMLDivElement | null>(null)
 
   // 'New since your last visit' tracking. lastSeenAt persists in
@@ -1002,7 +1002,7 @@ function DemoApp({ config }: { config: AppConfig }) {
   // listings just won't have those fields rendered.
   const hydrateFromDb = useCallback(async () => {
     try {
-      const res = await fetch("/api/listings")
+      const res = await fetch(api("/api/listings"))
       if (!res.ok) return
       const data = (await res.json()) as Listing[]
       setListings((prev) => {
@@ -1014,7 +1014,6 @@ function DemoApp({ config }: { config: AppConfig }) {
         }
         return Array.from(byId.values())
       })
-      setHydrated(true)
     } catch { /* silent — polling failure is fine */ }
   }, [])
 
@@ -1053,7 +1052,7 @@ function DemoApp({ config }: { config: AppConfig }) {
     setStreaming(true)
 
     try {
-      const res = await fetch("/api/tasks", {
+      const res = await fetch(api("/api/tasks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: q, budget: effectiveBudget }),
@@ -1065,7 +1064,7 @@ function DemoApp({ config }: { config: AppConfig }) {
         return
       }
       const { task_id } = await res.json()
-      const evt = new EventSource(`/api/tasks/${task_id}/stream`)
+      const evt = new EventSource(api(`/api/tasks/${task_id}/stream`))
       evtRef.current = evt
 
       evt.addEventListener("reasoning", (e) => {
@@ -1109,7 +1108,7 @@ function DemoApp({ config }: { config: AppConfig }) {
   // ── Backend monitor lifecycle ──
   const fetchMonitor = useCallback(async () => {
     try {
-      const res = await fetch("/api/monitor")
+      const res = await fetch(api("/api/monitor"))
       if (res.ok) setMonitor(await res.json())
     } catch { /* silent — polling failure is fine */ }
   }, [])
@@ -1142,7 +1141,7 @@ function DemoApp({ config }: { config: AppConfig }) {
     if (!q) { setError("Type a query first, then save it as the watch."); return }
     setMonitorBusy(true)
     try {
-      const res = await fetch("/api/monitor", {
+      const res = await fetch(api("/api/monitor"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: q }),
@@ -1163,7 +1162,7 @@ function DemoApp({ config }: { config: AppConfig }) {
   const stopBackendMonitor = useCallback(async () => {
     setMonitorBusy(true)
     try {
-      await fetch("/api/monitor", { method: "DELETE" })
+      await fetch(api("/api/monitor"), { method: "DELETE" })
       await fetchMonitor()
     } finally {
       setMonitorBusy(false)
@@ -1199,7 +1198,6 @@ function DemoApp({ config }: { config: AppConfig }) {
 
   // Backwards-compat alias for the call sites below
   const visibleListings = filteredListings
-  const hiddenCount = hiddenLowScoreCount
 
   // ── New-since-last-visit derivations ──
   const isNewSinceLastVisit = useCallback((l: Listing) => {

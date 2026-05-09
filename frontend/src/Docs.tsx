@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react"
-import { useConfigState } from "./config-context"
 
 // Parallel Web Systems palette — see Demo.tsx for source of values.
 const Z = {
@@ -375,7 +374,6 @@ function TableOfContents({ activeId }: { activeId: string }) {
 }
 
 export default function Docs() {
-  const { config } = useConfigState()
   const [activeId, setActiveId] = useState<string>(NAV[0].id)
 
   // Track which section is active in the viewport for the TOC.
