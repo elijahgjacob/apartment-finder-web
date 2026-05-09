@@ -1,25 +1,28 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
-import { useAppConfig } from "./config-context"
+import { useAppConfig, useConfigState } from "./config-context"
 import { ZillowMap } from "./components/zillow-map"
-import type { Listing } from "./types"
+import type { AppConfig, Listing } from "./types"
 
-// Brand-blue tuned to match the Zillow lockup. Deep, vibrant.
+// Parallel Web Systems palette. Per parallel-assets/README.md:
+//   off-white #fcfcfa · index black #1d1b16 · neural #d8d0bf · signal #fb631b
+// Variable names kept generic ('blue', 'blueDark', ...) so the theme
+// structure is preserved — only the values changed.
 const Z = {
-  blue: "#1F45FC",
-  blueDark: "#1736C7",
-  blueDarker: "#0D1F8A",
-  blueSoft: "#EEF1FF",
-  blueSofter: "#F7F9FF",
-  blueBorder: "#C7D2FF",
-  text: "#0E1117",
-  textSoft: "#3D434D",
-  textMid: "#5C6370",
-  textFaint: "#8B919E",
-  bgPage: "#F7F8FA",
-  bgCard: "#FFFFFF",
-  bgSubtle: "#F2F4F7",
-  border: "#E4E7EC",
-  borderSoft: "#EFF1F5",
+  blue: "#fb631b",       // Signal — primary accent
+  blueDark: "#cb4f12",
+  blueDarker: "#8a3608",
+  blueSoft: "#fff0e8",
+  blueSofter: "#fffaf6",
+  blueBorder: "#fcc7a8",
+  text: "#1d1b16",       // Index black
+  textSoft: "#3a352a",
+  textMid: "#5e574a",
+  textFaint: "#8a8273",
+  bgPage: "#fcfcfa",     // Off-white
+  bgCard: "#ffffff",
+  bgSubtle: "#f4f0e6",
+  border: "#d8d0bf",     // Neural
+  borderSoft: "#e8e1cf",
   green: "#137333",
   greenSoft: "#E6F4EA",
   amber: "#C77700",
@@ -31,12 +34,6 @@ const FONT_HEADING = "'Geist Variable', 'Geist', system-ui, sans-serif"
 const FONT_BODY = "'Geist Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
 const FONT_MONO = "ui-monospace, 'SF Mono', Menlo, monospace"
 
-const SUGGESTIONS = [
-  "Quiet 2-bedroom with a yard near a good elementary school under $4500",
-  "Pet-friendly studio in SoMa or Mission, available before December, under $3000",
-  "3BR with in-unit laundry and parking, walk to Caltrain, under $7000",
-  "Furnished 1BR for a 6-month lease, dog-friendly, under $4000",
-]
 
 type MonitorStatus = {
   active: boolean
@@ -92,17 +89,7 @@ function relativeTime(iso?: string): string {
   return `${d}d ago`
 }
 
-// Realistic monthly-rent floors by bed count, San Francisco-area.
-// (Used to flag impossible budgets before a search burns API quota.)
-const RENT_FLOORS_SF: Record<number, number> = {
-  0: 1900,   // studio
-  1: 2700,
-  2: 3600,
-  3: 5200,
-  4: 6500,
-  5: 8000,
-}
-
+// Pure parsers — operate on the user's typed query, no city-specific data.
 const WORD_TO_NUM: Record<string, number> = {
   studio: 0, zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6,
 }
@@ -117,46 +104,35 @@ function extractBedsFromQuery(query: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function realisticFloor(beds: number | null): number | null {
+// Per-bedroom rent floor lookup — config-driven, not hardcoded.
+function realisticFloor(beds: number | null, floors: Record<string, number>): number | null {
   if (beds == null) return null
-  return RENT_FLOORS_SF[beds] ?? RENT_FLOORS_SF[Math.min(beds, 5)] ?? null
+  return floors[String(beds)] ?? floors[String(Math.min(beds, 5))] ?? null
 }
 
-// ── Staleness detection ─────────────────────────────────────────────────
-//
-// Aggregator sites (Zillow, Apartments.com, Trulia, HotPads, PadMapper,
-// RentCafe, Rent.com, Showcase) keep listings live in their index long
-// after the unit is rented. Direct/curated sources (Craigslist auto-
-// expires after ~45d; Redfin/Compass/Realtor are MLS-fed) self-clean.
+// Staleness predicate — config-driven thresholds + aggregator list.
+function makeIsStale(
+  staleness: { aggregatorSources: string[]; aggregatorDays: number; directDays: number },
+) {
+  const aggregators = new Set(staleness.aggregatorSources)
+  return (l: Listing): boolean => {
+    const det = l.details ?? {}
+    if (det.is_currently_active === false) return true
 
-const AGGREGATOR_SOURCES = new Set([
-  "zillow", "apartments", "trulia", "hotpads",
-  "padmapper", "rentcafe", "rent", "showcase",
-])
-const STALE_AGGREGATOR_DAYS = 14
-const STALE_DIRECT_DAYS = 45
+    const dom = (det as { days_on_market?: number }).days_on_market
+    if (typeof dom === "number" && Number.isFinite(dom)) {
+      const limit = aggregators.has(l.source) ? staleness.aggregatorDays : staleness.directDays
+      return dom > limit
+    }
 
-function isStale(l: Listing): boolean {
-  // 1. API-derived signal (most reliable, when present).
-  const det = l.details ?? {}
-  if (det.is_currently_active === false) return true
-
-  const dom = (det as { days_on_market?: number }).days_on_market
-  if (typeof dom === "number" && Number.isFinite(dom)) {
-    const limit = AGGREGATOR_SOURCES.has(l.source) ? STALE_AGGREGATOR_DAYS : STALE_DIRECT_DAYS
-    return dom > limit
+    const referenceTs =
+      (det as { monitor_event_date?: string }).monitor_event_date ?? l.fetched_at ?? null
+    if (!referenceTs) return false
+    const ageDays = (Date.now() - new Date(referenceTs).getTime()) / 86_400_000
+    if (!Number.isFinite(ageDays)) return false
+    const limit = aggregators.has(l.source) ? staleness.aggregatorDays : staleness.directDays
+    return ageDays > limit
   }
-
-  // 2. Heuristic fallback. Use the more authoritative timestamp we have:
-  //    monitor_event_date if the listing came from the always-on Monitor
-  //    (that's the date Parallel detected it as new), else fetched_at.
-  const referenceTs =
-    (det as { monitor_event_date?: string }).monitor_event_date ?? l.fetched_at ?? null
-  if (!referenceTs) return false
-  const ageDays = (Date.now() - new Date(referenceTs).getTime()) / 86_400_000
-  if (!Number.isFinite(ageDays)) return false
-  const limit = AGGREGATOR_SOURCES.has(l.source) ? STALE_AGGREGATOR_DAYS : STALE_DIRECT_DAYS
-  return ageDays > limit
 }
 
 function extractBudgetFromQuery(query: string): number | null {
@@ -185,11 +161,10 @@ function extractBudgetFromQuery(query: string): number | null {
   return null
 }
 
-function defaultBudgetForBeds(beds: number | null): number {
-  if (beds == null) return 7500
-  // Floor + ~30% headroom so the search has somewhere to land
-  const floor = realisticFloor(beds)
-  return floor != null ? Math.round(floor * 1.3 / 250) * 250 : 7500
+function defaultBudgetForBeds(beds: number | null, floors: Record<string, number>, fallback: number): number {
+  // Floor + ~30% headroom so the search has somewhere to land.
+  const floor = realisticFloor(beds, floors)
+  return floor != null ? Math.round(floor * 1.3 / 250) * 250 : fallback
 }
 
 function avgPrice(listings: Listing[]): number | null {
@@ -270,11 +245,12 @@ function scorePalette(score: number | null | undefined) {
 }
 
 function ListingCard({
-  l, idx, city, isSessionNew, isFresh, isHovered, onHover, onLeave,
+  l, idx, city, isSessionNew, isFresh, stale, isHovered, onHover, onLeave,
 }: {
   l: Listing; idx: number; city: string
   isSessionNew: boolean   // arrived in current SSE stream — strongest visual
   isFresh: boolean        // appeared in DB after lastSeenAt — secondary visual
+  stale: boolean          // computed from config.staleness
   isHovered?: boolean
   onHover?: () => void
   onLeave?: () => void
@@ -359,7 +335,7 @@ function ListingCard({
             <span style={{ fontSize: "8px" }}>●</span> via monitor
           </span>
         )}
-        {isStale(l) && (
+        {stale && (
           <span
             className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
             style={{ backgroundColor: "#FFF4E0", color: "#A66300", border: `1px solid #F7D9A8` }}
@@ -959,11 +935,50 @@ function Skeleton() {
   )
 }
 
+// ── Loading / error screens ──────────────────────────────────────────────
+
+function CenteredScreen({ title, body, color }: { title: string; body: string; color?: string }) {
+  return (
+    <div
+      className="min-h-screen flex items-center justify-center px-6"
+      style={{ backgroundColor: Z.bgPage, color: Z.text, fontFamily: FONT_BODY }}
+    >
+      <div className="max-w-md text-center">
+        <div className="text-xs font-bold uppercase tracking-[0.16em] mb-3" style={{ color: color ?? Z.textFaint }}>
+          {title}
+        </div>
+        <p className="text-base leading-relaxed" style={{ color: Z.textMid }}>
+          {body}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Main component ───────────────────────────────────────────────────────
 
 export default function Demo() {
-  const config = useAppConfig()
-  const city = config?.cityShort ?? "San Francisco"
+  const { config, loading, error } = useConfigState()
+  if (loading) {
+    return <CenteredScreen title="Loading" body="Fetching configuration…" />
+  }
+  if (error) {
+    return (
+      <CenteredScreen
+        title="Backend unreachable"
+        color={Z.red}
+        body={`Couldn't load /api/config — ${error}. Make sure the FastAPI backend is running and reachable from this origin.`}
+      />
+    )
+  }
+  if (!config) {
+    return <CenteredScreen title="No config" body="The /api/config response was empty." />
+  }
+  return <DemoApp config={config} />
+}
+
+function DemoApp({ config }: { config: AppConfig }) {
+  const city = config.cityShort
 
   const [query, setQuery] = useState("")
   const [reasoning, setReasoning] = useState("")
@@ -987,7 +1002,7 @@ export default function Demo() {
   // localStorage; on first ever visit we initialize to (now - 24h)
   // so the most recent day's finds get the NEW treatment.
   const [lastSeenAt, setLastSeenAt] = useState<number>(() => {
-    const stored = window.localStorage.getItem("zillow-demo-lastSeenAt")
+    const stored = window.localStorage.getItem("parallel-demo-lastSeenAt")
     if (stored) {
       const n = parseInt(stored, 10)
       if (Number.isFinite(n)) return n
@@ -997,7 +1012,7 @@ export default function Demo() {
   const markAllSeen = useCallback(() => {
     const now = Date.now()
     setLastSeenAt(now)
-    window.localStorage.setItem("zillow-demo-lastSeenAt", String(now))
+    window.localStorage.setItem("parallel-demo-lastSeenAt", String(now))
   }, [])
   const handleMarkerClick = useCallback((id: string) => {
     setHoveredId(id)
@@ -1044,9 +1059,12 @@ export default function Demo() {
   const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
   const effectiveBudget = useMemo(
-    () => parsedBudget ?? defaultBudgetForBeds(parsedBeds) ?? config?.defaultBudget ?? 7500,
-    [parsedBudget, parsedBeds, config?.defaultBudget],
+    () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, config.rentFloors, config.defaultBudget),
+    [parsedBudget, parsedBeds, config.rentFloors, config.defaultBudget],
   )
+
+  // Staleness predicate built from server-provided config.
+  const isStale = useMemo(() => makeIsStale(config.staleness), [config.staleness])
 
   const startSearch = useCallback(async (q: string, opts: { keepListings?: boolean } = {}) => {
     if (!q.trim()) return
@@ -1176,15 +1194,15 @@ export default function Demo() {
       if (!showStale && isStale(l)) return false
       return true
     })
-  }, [sortedListings, showAllScores, showStale])
+  }, [sortedListings, showAllScores, showStale, isStale])
 
   const hiddenLowScoreCount = useMemo(
     () => sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l))).length,
-    [sortedListings, showStale],
+    [sortedListings, showStale, isStale],
   )
   const hiddenStaleCount = useMemo(
     () => sortedListings.filter((l) => isStale(l) && (showAllScores || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
-    [sortedListings, showAllScores],
+    [sortedListings, showAllScores, isStale],
   )
 
   // Backwards-compat alias for the call sites below
@@ -1205,7 +1223,7 @@ export default function Demo() {
   // Realism check is only meaningful when the user EXPLICITLY typed a budget
   // (not when we're falling back to a default). Otherwise we'd nag every
   // suggestion-chip click that didn't include a price.
-  const floor = useMemo(() => realisticFloor(parsedBeds), [parsedBeds])
+  const floor = useMemo(() => realisticFloor(parsedBeds, config.rentFloors), [parsedBeds, config.rentFloors])
   const budgetLikelyTooLow = floor != null && parsedBudget != null && parsedBudget < floor
 
   return (
@@ -1220,13 +1238,22 @@ export default function Demo() {
       >
         <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src="/zillow-logo.png" alt="Zillow" className="h-7 w-auto" />
+            {config.brand.logoUrl ? (
+              <img src={config.brand.logoUrl} alt={config.brand.name} className="h-7 w-auto" />
+            ) : (
+              <span
+                className="text-base font-bold tracking-tight"
+                style={{ color: Z.text, fontFamily: FONT_HEADING }}
+              >
+                {config.brand.name}
+              </span>
+            )}
             <span
               className="hidden sm:inline-flex items-center gap-1.5 pl-4 border-l text-xs font-bold uppercase tracking-[0.12em]"
               style={{ borderColor: Z.border, color: Z.textMid }}
             >
               <SparkleIcon size={11} color={Z.blue} />
-              AI Search
+              {config.brand.tagline}
             </span>
           </div>
           <a
@@ -1379,7 +1406,7 @@ export default function Demo() {
             <span className="text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: Z.textFaint }}>
               Try
             </span>
-            {SUGGESTIONS.map((s) => (
+            {config.suggestions.map((s) => (
               <button
                 key={s}
                 type="button"
@@ -1460,6 +1487,7 @@ export default function Demo() {
                       key={l.id} l={l} idx={i} city={city}
                       isSessionNew={newIds.has(l.id)}
                       isFresh={!newIds.has(l.id) && isNewSinceLastVisit(l)}
+                      stale={isStale(l)}
                       isHovered={hoveredId === l.id}
                       onHover={() => setHoveredId(l.id)}
                       onLeave={() => setHoveredId(null)}
@@ -1510,12 +1538,8 @@ export default function Demo() {
       </main>
 
       <footer className="max-w-6xl mx-auto px-6 py-10">
-        <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-1" style={{ color: Z.textFaint }}>
-          <span className="font-bold">Demo</span>
-          <span>·</span>
-          <span>Not affiliated with Zillow Group, Inc.</span>
-          <span>·</span>
-          <span className="inline-flex items-center gap-1">Search powered by <a href="https://parallel.ai" target="_blank" rel="noopener noreferrer" className="hover:underline font-semibold" style={{ color: Z.blueDark }}>Parallel</a></span>
+        <div className="text-xs" style={{ color: Z.textFaint }}>
+          {config.brand.disclaimer}
         </div>
       </footer>
     </div>

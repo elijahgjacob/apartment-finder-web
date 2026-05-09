@@ -48,6 +48,57 @@ GEO_LNG_MAX = float(os.environ.get("GEO_LNG_MAX", "-122.3"))
 
 APP_TITLE = os.environ.get("APP_TITLE", f"{CITY_SHORT} Apartment Finder")
 
+# ── Brand / theming (env-driven so deployment can re-skin) ──────────────
+
+BRAND_NAME = os.environ.get("BRAND_NAME", "Parallel")
+BRAND_TAGLINE = os.environ.get("BRAND_TAGLINE", "AI Apartment Search")
+# Path to a logo image served from the frontend's public dir, or an
+# absolute URL. Leave empty to render text-only mark.
+BRAND_LOGO_URL = os.environ.get("BRAND_LOGO_URL", "/parallel-logo.svg")
+BRAND_DISCLAIMER = os.environ.get(
+    "BRAND_DISCLAIMER",
+    "Powered by Parallel Web Systems · parallel.ai",
+)
+
+# Suggestion chips shown under the search bar. Pipe-separated so commas
+# can appear inside individual queries.
+SUGGESTIONS = [s.strip() for s in os.environ.get(
+    "SEARCH_SUGGESTIONS",
+    f"{SEARCH_BEDROOMS or '3'}-bedroom near transit, available within a month, under ${DEFAULT_BUDGET}|"
+    f"Pet-friendly studio in {CITY_SHORT}, available before December, under $3000|"
+    f"3BR with in-unit laundry and parking, walk to {REFERENCE_POINT_NAME}, under $7000|"
+    "Furnished 1BR for a 6-month lease, dog-friendly, under $4000",
+).split("|") if s.strip()]
+
+# Per-bedroom realistic monthly-rent floors for the current market.
+# Format: "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000". Used both for the
+# 'budget too low' warning and for the stale-cheap parse-miscue rejection.
+def _parse_rent_floors(raw: str) -> dict[int, int]:
+    out: dict[int, int] = {}
+    for pair in raw.split(","):
+        if ":" not in pair:
+            continue
+        k, v = pair.split(":", 1)
+        try:
+            out[int(k.strip())] = int(v.strip())
+        except ValueError:
+            continue
+    return out
+
+RENT_FLOORS = _parse_rent_floors(os.environ.get(
+    "RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000",
+))
+
+# Sources where listings stay live in the index after the unit is rented.
+# Comma-separated; values are the short source labels we derive from URLs.
+AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
+    "AGGREGATOR_SOURCES",
+    "trulia,hotpads,padmapper,rentcafe,rent,showcase",
+).split(",") if s.strip()]
+
+STALE_AGGREGATOR_DAYS = int(os.environ.get("STALE_AGGREGATOR_DAYS", "14"))
+STALE_DIRECT_DAYS = int(os.environ.get("STALE_DIRECT_DAYS", "45"))
+
 # Monitor API. The background loop is now driven by Parallel Monitor —
 # the FindAll polling cron is gone. Frequency accepts 1h / 6h / 1d / 1w / 30d.
 MONITOR_FREQUENCY = os.environ.get("MONITOR_FREQUENCY", "1h")

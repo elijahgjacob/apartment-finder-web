@@ -1,22 +1,23 @@
 import { useEffect, useState } from "react"
+import { useConfigState } from "./config-context"
 
-// Reusing the Zillow palette + Geist heading font from Demo.tsx
+// Parallel Web Systems palette — see Demo.tsx for source of values.
 const Z = {
-  blue: "#1F45FC",
-  blueDark: "#1736C7",
-  blueDarker: "#0D1F8A",
-  blueSoft: "#EEF1FF",
-  blueSofter: "#F7F9FF",
-  blueBorder: "#C7D2FF",
-  text: "#0E1117",
-  textSoft: "#3D434D",
-  textMid: "#5C6370",
-  textFaint: "#8B919E",
-  bgPage: "#F7F8FA",
-  bgCard: "#FFFFFF",
-  bgSubtle: "#F2F4F7",
-  border: "#E4E7EC",
-  borderSoft: "#EFF1F5",
+  blue: "#fb631b",
+  blueDark: "#cb4f12",
+  blueDarker: "#8a3608",
+  blueSoft: "#fff0e8",
+  blueSofter: "#fffaf6",
+  blueBorder: "#fcc7a8",
+  text: "#1d1b16",
+  textSoft: "#3a352a",
+  textMid: "#5e574a",
+  textFaint: "#8a8273",
+  bgPage: "#fcfcfa",
+  bgCard: "#ffffff",
+  bgSubtle: "#f4f0e6",
+  border: "#d8d0bf",
+  borderSoft: "#e8e1cf",
   green: "#137333",
   greenSoft: "#E6F4EA",
   amber: "#C77700",
@@ -374,6 +375,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
 }
 
 export default function Docs() {
+  const { config } = useConfigState()
   const [activeId, setActiveId] = useState<string>(NAV[0].id)
 
   // Track which section is active in the viewport for the TOC.

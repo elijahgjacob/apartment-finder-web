@@ -63,6 +63,19 @@ export type AppConfig = {
   mapZoom: number
   defaultBudget: number
   defaultQuery: string
+  brand: {
+    name: string
+    tagline: string
+    logoUrl: string  // empty string → render text-only mark
+    disclaimer: string
+  }
+  suggestions: string[]
+  rentFloors: Record<string, number>  // keys are stringified bed counts ("0","1",...)
+  staleness: {
+    aggregatorSources: string[]
+    aggregatorDays: number
+    directDays: number
+  }
 }
 
 export type TaskEvent =

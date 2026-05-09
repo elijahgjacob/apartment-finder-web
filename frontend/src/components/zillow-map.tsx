@@ -2,8 +2,9 @@ import { useEffect, useRef } from "react"
 import L from "leaflet"
 import type { AppConfig, Listing } from "@/types"
 
-const Z_BLUE = "#1F45FC"
-const Z_BLUE_DARK = "#1736C7"
+// Parallel signal accent — primary marker color when no score-based tier wins.
+const Z_BLUE = "#fb631b"
+const Z_BLUE_DARK = "#cb4f12"
 const Z_GREEN = "#137333"
 const Z_AMBER = "#C77700"
 const Z_RED = "#C62828"

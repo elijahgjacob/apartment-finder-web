@@ -15,6 +15,9 @@ from .config import (
     MONITOR_POLL_SECONDS,
     REFERENCE_POINT_NAME, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
     MAP_CENTER_LAT, MAP_CENTER_LNG, MAP_ZOOM,
+    BRAND_NAME, BRAND_TAGLINE, BRAND_LOGO_URL, BRAND_DISCLAIMER,
+    SUGGESTIONS, RENT_FLOORS,
+    AGGREGATOR_SOURCES, STALE_AGGREGATOR_DAYS, STALE_DIRECT_DAYS,
 )
 from .db import get_db
 from .geocode import geocode_address
@@ -159,6 +162,23 @@ async def get_config():
         "mapZoom": MAP_ZOOM,
         "defaultBudget": DEFAULT_BUDGET,
         "defaultQuery": DEFAULT_QUERY,
+        # Brand
+        "brand": {
+            "name": BRAND_NAME,
+            "tagline": BRAND_TAGLINE,
+            "logoUrl": BRAND_LOGO_URL,
+            "disclaimer": BRAND_DISCLAIMER,
+        },
+        # Suggestion chips
+        "suggestions": SUGGESTIONS,
+        # Per-bedroom rent floors for budget-realism warning
+        "rentFloors": RENT_FLOORS,
+        # Stale-results signals
+        "staleness": {
+            "aggregatorSources": AGGREGATOR_SOURCES,
+            "aggregatorDays": STALE_AGGREGATOR_DAYS,
+            "directDays": STALE_DIRECT_DAYS,
+        },
     })
 
 
