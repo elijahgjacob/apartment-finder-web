@@ -742,92 +742,64 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
 }
 
 function MonitorStrip({
-  monitor, busy, query, onWatch, onStop,
+  monitor, busy, onStop,
 }: {
   monitor: MonitorStatus | null
   busy: boolean
-  query: string
-  onWatch: () => void
   onStop: () => void
 }) {
   const active = !!monitor?.active
   const watchedQuery = monitor?.query ?? ""
-  const queryDiffersFromWatch = active && query.trim().length > 0 && query.trim() !== watchedQuery.trim()
-  const queryEmpty = query.trim().length === 0
+
+  // Show only when there's an active watch — saving one happens via the
+  // 'Watch' toggle next to the search button, not here.
+  if (!active) return null
 
   return (
     <div
-      className="rounded-2xl flex flex-wrap items-center gap-3 px-5 py-4 mb-6 transition-all"
+      className="rounded-2xl flex flex-wrap items-center gap-3 px-5 py-3 mb-6 transition-all"
       style={{
-        backgroundColor: active ? Z.blueSoft : Z.bgCard,
-        border: `1px solid ${active ? Z.blueBorder : Z.border}`,
+        backgroundColor: Z.blueSoft,
+        border: `1px solid ${Z.blueBorder}`,
       }}
     >
       <div className="flex items-center gap-2 shrink-0">
-        {active ? (
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: Z.blue }} />
-          </span>
-        ) : (
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: Z.textFaint }} />
-        )}
-        <span className="text-[11px] uppercase tracking-[0.14em] font-bold" style={{ color: active ? Z.blueDark : Z.textMid }}>
-          {active ? "Always-on watch" : "No watch active"}
+        <span className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: Z.blue }} />
+        </span>
+        <span className="text-[11px] uppercase tracking-[0.14em] font-bold" style={{ color: Z.blueDark }}>
+          Watching
         </span>
       </div>
 
       <div className="flex-1 min-w-0 text-sm flex items-center gap-2 flex-wrap" style={{ color: Z.textMid }}>
-        {active ? (
-          <>
-            <span
-              className="text-[12px] px-2 py-0.5 rounded truncate max-w-[420px]"
-              style={{ backgroundColor: "white", border: `1px solid ${Z.blueBorder}`, color: Z.blueDarker, fontFamily: FONT_HEADING, fontWeight: 600 }}
-              title={watchedQuery}
-            >
-              {watchedQuery.length > 80 ? watchedQuery.slice(0, 80) + "…" : (watchedQuery || "—")}
-            </span>
-            <span className="text-[12px]" style={{ color: Z.textMid }}>
-              every <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor?.frequency ?? "—"}</strong>
-              {" · "}
-              last run <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{relativeTime(monitor?.last_run_at)}</strong>
-              {monitor?.events_last_24h != null && (
-                <>{" · "}<strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor.events_last_24h}</strong> event{monitor.events_last_24h === 1 ? "" : "s"} in 24h</>
-              )}
-            </span>
-          </>
-        ) : (
-          <span style={{ color: Z.textMid }}>
-            Save a search and Parallel will quietly watch the web for new matches — they appear here as they're found.
-          </span>
-        )}
+        <span
+          className="text-[12px] px-2 py-0.5 rounded truncate max-w-[420px]"
+          style={{ backgroundColor: "white", border: `1px solid ${Z.blueBorder}`, color: Z.blueDarker, fontFamily: FONT_HEADING, fontWeight: 600 }}
+          title={watchedQuery}
+        >
+          {watchedQuery.length > 80 ? watchedQuery.slice(0, 80) + "…" : (watchedQuery || "—")}
+        </span>
+        <span className="text-[12px]" style={{ color: Z.textMid }}>
+          every <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor?.frequency ?? "—"}</strong>
+          {" · "}
+          last run <strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{relativeTime(monitor?.last_run_at)}</strong>
+          {monitor?.events_last_24h != null && (
+            <>{" · "}<strong style={{ color: Z.text, fontFamily: FONT_HEADING }}>{monitor.events_last_24h}</strong> event{monitor.events_last_24h === 1 ? "" : "s"} in 24h</>
+          )}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        {active && (
-          <button
-            type="button"
-            onClick={onStop}
-            disabled={busy}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-all hover:brightness-110"
-            style={{ backgroundColor: "white", color: Z.text, border: `1px solid ${Z.border}`, fontFamily: FONT_HEADING }}
-          >
-            Stop
-          </button>
-        )}
-        {(queryDiffersFromWatch || (!active && !queryEmpty)) && (
-          <button
-            type="button"
-            onClick={onWatch}
-            disabled={busy || queryEmpty}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
-            style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING }}
-            title={active ? "Replace the watched query with what's in the search bar" : "Start a Parallel Monitor for this query"}
-          >
-            {busy ? "Saving…" : (active ? "Watch this instead" : "Watch this query")}
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={onStop}
+        disabled={busy}
+        className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50 transition-all hover:brightness-110 shrink-0"
+        style={{ backgroundColor: "white", color: Z.text, border: `1px solid ${Z.border}`, fontFamily: FONT_HEADING }}
+      >
+        {busy ? "Stopping…" : "Stop watching"}
+      </button>
     </div>
   )
 }
@@ -992,6 +964,10 @@ function DemoApp({ config }: { config: AppConfig }) {
   // Backend monitor state — driven by GET /api/monitor.
   const [monitor, setMonitor] = useState<MonitorStatus | null>(null)
   const [monitorBusy, setMonitorBusy] = useState(false)
+  // 'Watch this query' inline toggle (lives next to the Search button).
+  // Submitting the form with this on POSTs /api/monitor with the query
+  // so it becomes the always-on watch.
+  const [watchOnSubmit, setWatchOnSubmit] = useState(false)
 
   const [view, setView] = useState<ViewMode>("list")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -1123,6 +1099,11 @@ function DemoApp({ config }: { config: AppConfig }) {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     startSearch(query)
+    // If the user opted in via the inline toggle, also save this query
+    // as the always-on watch (creates or replaces the Parallel Monitor).
+    if (watchOnSubmit) {
+      void watchThisQuery()
+    }
   }
 
   // ── Backend monitor lifecycle ──
@@ -1138,6 +1119,17 @@ function DemoApp({ config }: { config: AppConfig }) {
     const t = window.setInterval(fetchMonitor, 30_000)
     return () => window.clearInterval(t)
   }, [fetchMonitor])
+
+  // Auto-check the inline 'Watch' toggle when the typed query matches
+  // the currently-watched query. So returning to a watched search shows
+  // the already-watched state without the user having to re-check.
+  useEffect(() => {
+    if (!monitor?.active) return
+    const watched = (monitor.query ?? "").trim()
+    if (watched && watched === query.trim()) {
+      setWatchOnSubmit(true)
+    }
+  }, [monitor?.active, monitor?.query, query])
 
   // Refresh listings every 30s — picks up new ones the backend Monitor saved.
   useEffect(() => {
@@ -1322,13 +1314,29 @@ function DemoApp({ config }: { config: AppConfig }) {
                 autoFocus
               />
             </div>
+            <label
+              className="flex items-center gap-2 px-3 cursor-pointer select-none border-l shrink-0"
+              style={{ borderColor: Z.borderSoft }}
+              title="When checked, also save this query as the always-on watch. New matching listings will appear automatically over time."
+            >
+              <input
+                type="checkbox"
+                checked={watchOnSubmit}
+                onChange={(e) => setWatchOnSubmit(e.target.checked)}
+                className="w-4 h-4 cursor-pointer"
+                style={{ accentColor: Z.blue }}
+              />
+              <span className="text-xs font-bold uppercase tracking-[0.1em]" style={{ color: Z.textMid, fontFamily: FONT_HEADING }}>
+                Watch
+              </span>
+            </label>
             <button
               type="submit"
-              disabled={!query.trim()}
+              disabled={!query.trim() || monitorBusy}
               className="px-7 py-3 rounded-xl font-bold text-sm text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
               style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING, letterSpacing: "0.01em" }}
             >
-              {streaming ? "Searching…" : "Search"}
+              {streaming ? "Searching…" : watchOnSubmit ? "Search & Watch" : "Search"}
             </button>
           </form>
 
@@ -1427,12 +1435,11 @@ function DemoApp({ config }: { config: AppConfig }) {
       </section>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Backend Monitor strip — reflects /api/monitor */}
+        {/* Backend Monitor strip — only renders when a watch is active.
+            Starting one happens via the 'Watch' toggle next to the Search button. */}
         <MonitorStrip
           monitor={monitor}
           busy={monitorBusy}
-          query={query}
-          onWatch={watchThisQuery}
           onStop={stopBackendMonitor}
         />
 
