@@ -609,31 +609,31 @@ fits_budget
 
             <H2 id="scoring">Result scoring</H2>
             <P>
-              Every listing gets a 0–100 score: recency (35) + price fit (40) + proximity
-              (15). Distance was 25 pts originally but was over-promoting Mission-Bay-
-              cluster listings; now it's a tie-breaker rather than a primary factor.
+              Every listing gets a 0–100 score from three equally-weighted factors:
+              recency, price fit, and proximity to the reference point. Each factor
+              contributes at most 33 points. No single signal dominates ranking.
             </P>
             <Card>
               <H3>Bands</H3>
-              <Block>{`Recency (max 35)
-  < 24h:  +35
-  < 72h:  +25
-  < 168h: +15
+              <Block>{`Recency (max 33)
+  < 24h:  +33
+  < 72h:  +24
+  < 168h: +14
   else:   +5
 
-Price fit (max 40, U-curve)
+Price fit (max 33, U-curve)
   ratio > 1.0:                                    +0   (over budget)
-  price < 60% of typical for this bedroom count:  +8   (suspect — likely parse error)
-  ratio ≤ 0.7:                                    +40  (good deal, realistic)
-  ratio 0.7-0.8:                                  +36
-  ratio 0.8-0.9:                                  +28
-  ratio 0.9-1.0:                                  +18  (top of budget)
+  price < 60% of typical for this bedroom count:  +6   (suspect — likely parse error)
+  ratio ≤ 0.7:                                    +33  (good deal, realistic)
+  ratio 0.7-0.8:                                  +28
+  ratio 0.8-0.9:                                  +22
+  ratio 0.9-1.0:                                  +14  (top of budget)
 
-Proximity to reference point (max 15)
-  < 1 km:    +15
-  < 2.5 km:  +12
-  < 5 km:    +9
-  else:      +6`}</Block>
+Proximity to reference point (max 33)
+  < 1 km:    +33
+  < 2.5 km:  +24
+  < 5 km:    +16
+  else:      +9`}</Block>
             </Card>
             <P>
               Strong-fit threshold is <Code>70/100</Code>. The UI hides everything below

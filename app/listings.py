@@ -112,56 +112,55 @@ def _typical_rent(beds: int | None) -> int | None:
 
 
 def compute_score(listing: Listing, budget: int) -> int:
+    """Equal-weight 3-factor score: each factor contributes at most 33
+    points (recency, price fit, proximity to reference). Cap at 100."""
     score = 0
 
+    # ── Recency (max 33) ───────────────────────────────────────────────
     age_hours = (datetime.now(timezone.utc) - listing.listed_at).total_seconds() / 3600
     if age_hours < 24:
-        score += 35
+        score += 33
     elif age_hours < 72:
-        score += 25
+        score += 24
     elif age_hours < 168:
-        score += 15
+        score += 14
     else:
         score += 5
 
-    # Price fit: U-curve. Best score for prices at 70-100% of budget
-    # ("good deal but realistic"). Penalize unrealistically low prices —
-    # they are almost always parse miscues that survived the insert-time
-    # floor check (e.g. legitimate BMR units that we let through).
+    # ── Price fit (max 33) ─────────────────────────────────────────────
+    # U-curve: prices > budget score 0; prices unrealistically below the
+    # bedroom-typical floor get 6 (likely parse miscue); the realistic
+    # bands get the full top tier.
     if listing.price:
         typical = _typical_rent(listing.bedrooms)
         ratio = listing.price / budget
 
         if ratio > 1.0:
-            price_pts = 0  # over budget
+            price_pts = 0
         elif typical is not None and listing.price < typical * 0.6:
-            # Way below market for this bedroom count → suspicious, low pts
-            price_pts = 8
+            price_pts = 6
         elif ratio <= 0.7:
-            price_pts = 40
+            price_pts = 33
         elif ratio <= 0.8:
-            price_pts = 36
-        elif ratio <= 0.9:
             price_pts = 28
+        elif ratio <= 0.9:
+            price_pts = 22
         else:  # 0.9 < ratio <= 1.0
-            price_pts = 18
+            price_pts = 14
 
         score += price_pts
 
-    # Looser proximity weighting — being right next to the reference point
-    # used to dominate the score (25 pts of 100). Now distance contributes
-    # at most 15 pts and the floor is 6, so price + recency drive ranking
-    # more than location-clustering does.
+    # ── Proximity to reference point (max 33) ──────────────────────────
     if listing.lat is not None and listing.lng is not None:
         km = _haversine_km(listing.lat, listing.lng, SEARCH_LAT, SEARCH_LNG)
         if km < 1.0:
-            score += 15
+            score += 33
         elif km < 2.5:
-            score += 12
+            score += 24
         elif km < 5.0:
-            score += 9
+            score += 16
         else:
-            score += 6
+            score += 9
 
     return min(score, 100)
 
