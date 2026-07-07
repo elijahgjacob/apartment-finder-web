@@ -1,99 +1,92 @@
-# Deploying
+# Deployment
 
-Two pieces:
-- **Frontend** — Vercel-hosted static build (React/Vite output).
-- **Backend** — FastAPI + SQLite + a long-running Monitor poll loop.
-  Cannot run on Vercel; needs a real container host.
+Two pieces to deploy:
 
-## 1. Backend (must deploy first)
+- **Backend** (`backend/`) — FastAPI + SQLite + long-running Monitor loop. Needs a persistent container host.
+- **Frontend** (`frontend/`) — Next.js application. Can deploy to Vercel or any Node.js host.
 
-Vercel can't host this backend because:
-- SQLite needs a persistent filesystem; Vercel functions are ephemeral.
-- The Monitor poll loop runs forever; serverless functions are bounded.
-- A FindAll search runs for ~12 minutes (90 polls × 8s); that exceeds
-  the function-duration cap on most tiers.
+## Option 1: Docker Compose (simplest)
 
-Pick one of these container hosts:
+Run both services together:
 
-### Option A — Fly.io (recommended for low ops)
+```bash
+# Configure backend environment
+cp backend/.env.example backend/.env
+# Edit backend/.env and set PARALLEL_API_KEY
 
-```sh
-brew install flyctl
-fly launch --image-from-dockerfile  # see Dockerfile section below
+docker-compose up --build
+```
+
+- Backend: http://localhost:8000
+- Frontend: http://localhost:3000
+
+## Option 2: Deploy Separately
+
+### Backend — Container Host
+
+The backend cannot run on serverless platforms because:
+
+- SQLite needs a persistent filesystem.
+- The Monitor poll loop runs continuously.
+- FindAll searches can run for ~12 minutes (90 polls x 8s).
+
+Pick a container host: **Fly.io** (recommended), Railway, Render, or Heroku.
+
+#### Fly.io
+
+```bash
+cd backend
+fly launch
 fly secrets set \
     PARALLEL_API_KEY=... \
     INTERNAL_API_KEY=... \
     ALLOWED_ORIGINS=https://your-frontend.vercel.app
+fly volumes create data --size 1
 fly deploy
-fly volumes create data --size 1   # 1 GB persistent volume for SQLite
 ```
 
-Mount the volume at `/app/data` and set `SQLITE_PATH=/app/data/listings.db`.
+Mount the volume at `/backend/data` and set `SQLITE_PATH=/backend/data/listings.db`.
 
-### Option B — Railway / Render / Heroku
+#### Other Hosts
 
-Same pattern: build the Docker image, mount a volume for `data/`, set the
-env vars listed below.
+Same pattern: build from `backend/Dockerfile`, mount a volume for `data/`, set the environment variables.
 
-### Required env vars
+### Frontend — Vercel
 
-| Var | Purpose |
-|---|---|
-| `PARALLEL_API_KEY` | Required. Provisioned at platform.parallel.ai |
-| `INTERNAL_API_KEY` | Optional. If set, `POST /api/tasks` and `POST /api/monitor` require this header. |
-| `ALLOWED_ORIGINS` | **Critical.** Comma-separated list of origins allowed to make API calls. Must include the Vercel frontend URL. e.g. `https://your-frontend.vercel.app,http://localhost:5173`. |
-| `SQLITE_PATH` | Path to the persistent DB file. Default `./data/listings.db`. |
-
-Plus all the brand / search / scoring vars in `.env.example`.
-
-### Dockerfile (drop into repo root)
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app/ app/
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```bash
+cd frontend
+vercel deploy --prod
 ```
 
-## 2. Frontend on Vercel
+Set the environment variable in Vercel:
 
-Already deployed via `vercel deploy` from `frontend/`. Two steps to make it work:
-
-```sh
-# 1. Tell the frontend where the backend is
-vercel env add VITE_API_BASE production
+```bash
+vercel env add NEXT_PUBLIC_API_BASE production
 # paste: https://your-backend.fly.dev (no trailing slash)
-
-# 2. Redeploy so the env var is baked into the build
-cd frontend && vercel deploy --prod
+vercel deploy --prod   # redeploy to pick up the new env var
 ```
 
-The `VITE_API_BASE` variable is consumed in `src/lib/api.ts` and prepended
-to every `/api/*` fetch + EventSource URL. Empty string in dev (Vite
-proxy handles it); full URL in prod.
+### Required Environment Variables
 
-## 3. Smoke test
+| Variable | Required | Description |
+|---|---|---|
+| `PARALLEL_API_KEY` | Yes | API key from platform.parallel.ai |
+| `INTERNAL_API_KEY` | No | If set, gates POST/DELETE endpoints |
+| `ALLOWED_ORIGINS` | Yes (prod) | Comma-separated allowed CORS origins |
+| `SQLITE_PATH` | No | Path to DB file (default: `./data/listings.db`) |
+| `NEXT_PUBLIC_API_BASE` | Yes (prod) | Backend URL for the frontend |
 
-```sh
-curl https://your-backend.fly.dev/api/config | jq .brand
-curl https://your-frontend.vercel.app                 # loads the SPA
+See `backend/.env.example` for all backend configuration options.
+
+## Smoke Test
+
+```bash
+curl https://your-backend.fly.dev/api/health
+curl https://your-frontend.vercel.app
 ```
 
-Visit the frontend URL. If you see "Backend unreachable", the issue is
-either:
-- `VITE_API_BASE` not set / set to the wrong URL → check Vercel env vars
-- `ALLOWED_ORIGINS` on the backend doesn't include the Vercel origin →
-  check backend env
+## Limitations
 
-## What's NOT included in this stack
-
-- No CDN for SQLite — the DB lives on a single attached volume. For
-  high availability, swap SQLite for Vercel Postgres / Supabase / Turso.
-- No queue for FindAll runs — they live in the FastAPI process memory
-  (`_tasks` dict). A restart drops in-flight searches.
-- No auth on `/api/listings` (read-only) or `/api/monitor` (GET) —
-  add it before exposing publicly. `INTERNAL_API_KEY` only gates the
-  POST/DELETE endpoints today.
+- SQLite runs on a single attached volume — no horizontal scaling. Swap for Postgres/Turso for HA.
+- In-flight searches live in process memory. A restart drops them.
+- Read-only endpoints (`GET /api/listings`, `GET /api/monitor`) have no auth by default.
