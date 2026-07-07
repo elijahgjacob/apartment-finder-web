@@ -12,11 +12,14 @@ event_id across restarts.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+
+logger = logging.getLogger("apt-finder.monitor")
 
 from ..config import (
     BLOCKED_DOMAINS,
@@ -99,9 +102,9 @@ async def replace_monitor(client: ParallelClient, query: str) -> dict:
     if old_id:
         try:
             await client.monitor_delete(old_id)
-            print(f"[monitor] deleted old monitor {old_id}")
+            logger.info("Deleted old monitor %s", old_id)
         except httpx.HTTPError as e:
-            print(f"[monitor] delete of {old_id} failed (non-fatal): {e}")
+            logger.warning("Delete of monitor %s failed (non-fatal): %s", old_id, e)
 
     body = {
         "type": "event_stream",
@@ -120,7 +123,7 @@ async def replace_monitor(client: ParallelClient, query: str) -> dict:
         "query": query.strip(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    print(f"[monitor] created replacement monitor {mon['monitor_id']}")
+    logger.info("Created replacement monitor %s", mon["monitor_id"])
     return mon
 
 
@@ -134,9 +137,9 @@ async def delete_monitor(client: ParallelClient) -> bool:
     try:
         await client.monitor_delete(monitor_id)
     except httpx.HTTPError as e:
-        print(f"[monitor] delete of {monitor_id} failed: {e}")
+        logger.warning("Delete of monitor %s failed: %s", monitor_id, e)
     delete_state_file()
-    print(f"[monitor] cleared monitor {monitor_id}")
+    logger.info("Cleared monitor %s", monitor_id)
     return True
 
 
@@ -151,7 +154,7 @@ async def ensure_monitor(client: ParallelClient) -> dict:
         except httpx.HTTPStatusError as e:
             if e.response.status_code != 404:
                 raise
-            print(f"[monitor] persisted monitor {state['monitor_id']} not found, recreating")
+            logger.info("Persisted monitor %s not found, recreating", state["monitor_id"])
 
     body = {
         "type": "event_stream",
@@ -169,7 +172,7 @@ async def ensure_monitor(client: ParallelClient) -> dict:
         "monitor_id": mon["monitor_id"],
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    print(f"[monitor] created monitor {mon['monitor_id']} (frequency={MONITOR_FREQUENCY}, processor={MONITOR_PROCESSOR})")
+    logger.info("Created monitor %s (frequency=%s, processor=%s)", mon["monitor_id"], MONITOR_FREQUENCY, MONITOR_PROCESSOR)
     return mon
 
 
@@ -258,7 +261,7 @@ async def poll_once(client: ParallelClient, monitor_id: str) -> list[dict]:
     try:
         resp = await client.monitor_events(monitor_id)
     except httpx.HTTPError as e:
-        print(f"[monitor] events fetch failed: {e}")
+        logger.warning("Monitor events fetch failed: %s", e)
         return []
 
     events = resp.get("events") or []
@@ -283,7 +286,7 @@ async def poll_once(client: ParallelClient, monitor_id: str) -> list[dict]:
             saved.append(listing)
 
     if saved:
-        print(f"[monitor] +{len(saved)} new listings from {len(events)} events")
+        logger.info("+%d new listings from %d events", len(saved), len(events))
     return saved
 
 

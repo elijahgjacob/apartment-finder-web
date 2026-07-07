@@ -1,7 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
+import { api } from "@/lib/api"
 import { Z, FONT_HEADING, FONT_BODY, FONT_MONO } from "@/lib/palette"
+import type { AppConfig } from "@/types"
+
+/* ── Shared typography ──────────────────────────────────────────────── */
 
 function H1({ children }: { children: React.ReactNode }) {
   return (
@@ -78,6 +82,68 @@ function Block({ children }: { children: React.ReactNode }) {
     </pre>
   )
 }
+
+function Card({ children, accent }: { children: React.ReactNode; accent?: string }) {
+  return (
+    <div
+      style={{
+        backgroundColor: Z.bgCard,
+        border: `1px solid ${Z.border}`,
+        borderLeft: accent ? `3px solid ${accent}` : `1px solid ${Z.border}`,
+        borderRadius: 12,
+        padding: "18px 20px",
+        marginBottom: "1rem",
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────────── */
+
+type TabId = "architecture" | "api-calls" | "configuration"
+const TABS: { id: TabId; label: string }[] = [
+  { id: "architecture", label: "Architecture" },
+  { id: "api-calls", label: "Live API Calls" },
+  { id: "configuration", label: "Configuration" },
+]
+
+function TabBar({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 2, padding: 4, backgroundColor: Z.bgSubtle, borderRadius: 14, marginBottom: 32 }}>
+      {TABS.map((t) => {
+        const isActive = active === t.id
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => onChange(t.id)}
+            style={{
+              flex: 1,
+              padding: "10px 16px",
+              borderRadius: 10,
+              border: "none",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: FONT_HEADING,
+              letterSpacing: "-0.01em",
+              backgroundColor: isActive ? Z.bgCard : "transparent",
+              color: isActive ? Z.text : Z.textMid,
+              boxShadow: isActive ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {t.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ── Architecture tab (original docs content) ────────────────────────── */
 
 type DiagBox = {
   x: number; y: number; w: number; h: number
@@ -222,24 +288,7 @@ function ArchDiagram() {
   )
 }
 
-function Card({ children, accent }: { children: React.ReactNode; accent?: string }) {
-  return (
-    <div
-      style={{
-        backgroundColor: Z.bgCard,
-        border: `1px solid ${Z.border}`,
-        borderLeft: accent ? `3px solid ${accent}` : `1px solid ${Z.border}`,
-        borderRadius: 12,
-        padding: "18px 20px",
-        marginBottom: "1rem",
-      }}
-    >
-      {children}
-    </div>
-  )
-}
-
-const NAV: { id: string; label: string }[] = [
+const ARCH_NAV: { id: string; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "pipeline", label: "Pipeline" },
   { id: "discovery", label: "Discovery" },
@@ -252,12 +301,12 @@ const NAV: { id: string; label: string }[] = [
   { id: "cookbook", label: "Cookbook fixes" },
 ]
 
-function TableOfContents({ activeId }: { activeId: string }) {
+function ArchTableOfContents({ activeId }: { activeId: string }) {
   return (
     <nav
       style={{
         position: "sticky",
-        top: 24,
+        top: 80,
         alignSelf: "flex-start",
         padding: "16px 18px",
         backgroundColor: Z.bgCard,
@@ -269,7 +318,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
         Contents
       </div>
       <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 6 }}>
-        {NAV.map((n) => (
+        {ARCH_NAV.map((n) => (
           <li key={n.id}>
             <a
               href={`#${n.id}`}
@@ -289,11 +338,11 @@ function TableOfContents({ activeId }: { activeId: string }) {
   )
 }
 
-export default function DocsPage() {
-  const [activeId, setActiveId] = useState<string>(NAV[0].id)
+function ArchitectureTab() {
+  const [activeId, setActiveId] = useState<string>(ARCH_NAV[0].id)
 
   useEffect(() => {
-    const sections = NAV.map((n) => document.getElementById(n.id)).filter((x): x is HTMLElement => !!x)
+    const sections = ARCH_NAV.map((n) => document.getElementById(n.id)).filter((x): x is HTMLElement => !!x)
     if (sections.length === 0) return
     const observer = new IntersectionObserver(
       (entries) => {
@@ -306,6 +355,467 @@ export default function DocsPage() {
     sections.forEach((s) => observer.observe(s))
     return () => observer.disconnect()
   }, [])
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px", gap: 40 }}>
+      <article>
+        <H2 id="overview">Overview</H2>
+        <P>Two flows feed listings into the catalog:</P>
+        <ul style={{ color: Z.textSoft, lineHeight: 1.8, fontSize: "0.95rem", paddingLeft: 24 }}>
+          <li><strong style={{ color: Z.text }}>User-driven discovery.</strong> User types natural language &#x2192; backend translates into a Parallel FindAll run with explicit match conditions and 18 enrichments &#x2192; matched candidates stream to the UI as they&apos;re verified.</li>
+          <li><strong style={{ color: Z.text }}>Always-on watch.</strong> A Parallel Monitor runs hourly with a saved query &#x2192; events POSTed to the local poll loop &#x2192; new findings persisted with <Code>details.via_monitor = true</Code>.</li>
+        </ul>
+        <P>Both flows write to the same SQLite catalog. The frontend hydrates from <Code>/api/listings</Code> on mount and polls every 30s, so Monitor-discovered listings show up without a page reload.</P>
+
+        <H2 id="pipeline">Pipeline</H2>
+        <P>Two flows feed the SQLite catalog. Both pass through their own guard chain before insert; the UI hydrates from the merged set.</P>
+        <ArchDiagram />
+
+        <H2 id="discovery">Discovery</H2>
+        <P>FindAll runs at the <Code>pro</Code> generator tier (env-overridable via <Code>FINDALL_GENERATOR</Code>). Match conditions are deliberately short and forgiving &#x2014; strict conditions cause zero-match runs because the API can&apos;t always verify them from page text.</P>
+        <Card>
+          <H3>Match conditions (only 2)</H3>
+          <Block>{`is_rental_listing
+  → "individual rental property listing in or near {CITY}.
+     Reject any candidate whose URL is on these domains:
+     zillow.com, apartments.com, yelp.com.
+     Prefer the original landlord, broker, or property-management site."
+
+fits_budget
+  → "Asking monthly rent ≤ \${budget}.
+     If rent isn't shown, treat as matched (don't reject for missing data)."`}</Block>
+          <P>Bedroom count is <em>not</em> a match condition. We extract it via the <Code>bedrooms</Code> enrichment and post-filter against the user&apos;s requested minimum in <Code>_candidate_to_listing</Code>.</P>
+        </Card>
+
+        <H2 id="enrichment">Enrichment</H2>
+        <P>The API extracts 18 structured fields per match. Each description follows the cookbook&apos;s <strong style={{ color: Z.text }}>Entity &#x2192; Action &#x2192; Specifics &#x2192; Error handling</strong> structure.</P>
+        <Card>
+          <H3>What we extract</H3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 13, lineHeight: 1.7, color: Z.textMid }}>
+            {["street_address","monthly_rent_usd","bedrooms","bathrooms","square_feet","available_date","lease_term","pet_policy","is_furnished","utilities_included","parking_type","laundry_type","building_amenities","neighborhood","contact_phone","contact_email","is_currently_active","days_on_market"].map(f => (
+              <div key={f}>&#xB7; <Code>{f}</Code></div>
+            ))}
+          </div>
+        </Card>
+
+        <H2 id="trust">Trust scoring</H2>
+        <P>For listings from untrusted sources, a Task-API call classifies them against five fact-based booleans. Score is computed in code from the true facts.</P>
+        <Card>
+          <H3>The five facts (weighted)</H3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13.5, lineHeight: 1.6 }}>
+            {([["demands_off_platform_payment","60"],["owner_claims_to_be_abroad","30"],["withholds_address_until_contact","25"],["no_in_person_viewing_offered","20"],["unusual_incentives","15"]] as const).map(([k,w]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between" }}>
+                <span><Code>{k}</Code></span>
+                <Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">{w} pts</Pill>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <H2 id="monitor">Always-on watch</H2>
+        <P>A single Parallel Monitor runs at <Code>1h</Code> frequency with the <Code>base</Code> processor. The local poll loop hits <Code>GET /v1/monitors/{"{id}"}/events</Code> every 60s for new events.</P>
+
+        <H2 id="scoring">Result scoring</H2>
+        <P>Every listing gets a 0&#x2013;100 score from three equally-weighted factors: recency, price fit, and proximity to the reference point.</P>
+        <Card>
+          <H3>Bands</H3>
+          <Block>{`Recency (max 33)        Price fit (max 33)         Proximity (max 33)
+  < 24h:  +33             ≤ 0.7 ratio: +33          < 1 km:   +33
+  < 72h:  +24             0.7–0.8:     +28          < 2.5 km: +24
+  < 168h: +14             0.8–0.9:     +22          < 5 km:   +16
+  else:   +5              0.9–1.0:     +14          else:     +9`}</Block>
+        </Card>
+
+        <H2 id="quality">Quality controls</H2>
+        <Card accent={Z.red}>
+          <H3>Blocked domains</H3>
+          <P>Refused at three layers: FindAll match condition, Monitor query string, and an insert-time URL guard.</P>
+          <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 8 }}>
+            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>zillow.com</Pill>
+            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>apartments.com</Pill>
+            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>yelp.com</Pill>
+          </div>
+        </Card>
+
+        <Card accent={Z.amber}>
+          <H3>Plausibility floors</H3>
+          <P>A per-bedroom rent floor catches listings where the model picked up the street number, zip code, or a deposit as the rent.</P>
+        </Card>
+
+        <Card accent={Z.amber}>
+          <H3>Stale-results filter</H3>
+          <P>Aggregator sites: &gt;14 days = stale. Direct sources: &gt;45 days = stale. API-derived <Code>is_currently_active</Code> overrides when present.</P>
+        </Card>
+
+        <H2 id="config">Configuration</H2>
+        <P>All knobs are environment variables in <Code>.env</Code>. See the Configuration tab for live values.</P>
+
+        <H2 id="cookbook">Cookbook fixes</H2>
+        <P>Five anti-patterns from the Parallel cookbook were fixed during development:</P>
+        {[
+          ["1. Subjective output decomposition", "Replaced is_likely_spam with five fact-based booleans weighted in code."],
+          ["2. No rationale / confidence fields", "Removed duplicate reasoning — the Task API returns basis arrays natively."],
+          ["3. Required arrays include all properties", "All schemas use required + additionalProperties: false."],
+          ["4. Standardized error sentinel", 'Every enrichment returns empty string when data is missing.'],
+          ["5. Entity → Action → Specifics → Error", "All 18 enrichment descriptions follow this four-part structure."],
+        ].map(([title, desc]) => (
+          <Card key={title}>
+            <H3>{title}</H3>
+            <P>{desc}</P>
+          </Card>
+        ))}
+      </article>
+
+      <ArchTableOfContents activeId={activeId} />
+    </div>
+  )
+}
+
+/* ── Live API Calls tab ──────────────────────────────────────────────── */
+
+type ApiCall = {
+  timestamp: string
+  api: string
+  method: string
+  path: string
+  status_code: number | null
+  duration_ms: number | null
+  request_summary: string
+  response_summary: string
+  error: string | null
+}
+
+type ApiCallsResponse = {
+  calls: ApiCall[]
+  stats: { total: number; errors: number; buffer_size: number }
+}
+
+const API_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
+  FindAll:  { bg: Z.blueSoft,  fg: Z.blueDark,  border: Z.blueBorder },
+  Monitor:  { bg: "#FFF4E0",   fg: "#A66300",   border: "#F7D9A8" },
+  Task:     { bg: Z.greenSoft, fg: Z.green,     border: "#BAE0C2" },
+  Geocode:  { bg: Z.bgSubtle,  fg: Z.textMid,   border: Z.border },
+}
+
+function ApiCallRow({ call }: { call: ApiCall }) {
+  const [expanded, setExpanded] = useState(false)
+  const colors = API_COLORS[call.api] ?? API_COLORS.Geocode
+  const isError = call.error || (call.status_code && call.status_code >= 400)
+  const ts = new Date(call.timestamp)
+  const timeStr = ts.toLocaleTimeString()
+
+  return (
+    <div
+      style={{
+        backgroundColor: Z.bgCard,
+        border: `1px solid ${isError ? "#F4B5B5" : Z.border}`,
+        borderRadius: 10,
+        marginBottom: 6,
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          padding: "10px 14px",
+          border: "none",
+          background: "transparent",
+          cursor: "pointer",
+          textAlign: "left",
+          fontFamily: FONT_BODY,
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: 6,
+            backgroundColor: colors.bg,
+            color: colors.fg,
+            border: `1px solid ${colors.border}`,
+            fontFamily: FONT_HEADING,
+            letterSpacing: "0.02em",
+            flexShrink: 0,
+            minWidth: 58,
+            textAlign: "center",
+          }}
+        >
+          {call.api}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: call.method === "POST" ? Z.blueDark : Z.textMid,
+            fontFamily: FONT_MONO,
+            flexShrink: 0,
+            width: 36,
+          }}
+        >
+          {call.method}
+        </span>
+        <span
+          style={{
+            fontSize: 12,
+            color: Z.textSoft,
+            fontFamily: FONT_MONO,
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {call.path}
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            color: isError ? Z.red : call.status_code && call.status_code < 300 ? Z.green : Z.textMid,
+            fontFamily: FONT_MONO,
+            flexShrink: 0,
+          }}
+        >
+          {call.status_code ?? "ERR"}
+        </span>
+        {call.duration_ms != null && (
+          <span style={{ fontSize: 11, color: Z.textFaint, fontFamily: FONT_MONO, flexShrink: 0, minWidth: 52, textAlign: "right" }}>
+            {call.duration_ms < 1000 ? `${Math.round(call.duration_ms)}ms` : `${(call.duration_ms / 1000).toFixed(1)}s`}
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: Z.textFaint, flexShrink: 0 }}>{timeStr}</span>
+        <span style={{ fontSize: 10, color: Z.textFaint, flexShrink: 0, transform: expanded ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>&#x25B6;</span>
+      </button>
+      {expanded && (
+        <div style={{ padding: "0 14px 12px", borderTop: `1px solid ${Z.borderSoft}` }}>
+          {call.error && (
+            <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8, backgroundColor: Z.redSoft, color: Z.red, fontSize: 12, fontFamily: FONT_MONO }}>
+              {call.error}
+            </div>
+          )}
+          {call.request_summary && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: Z.textFaint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Request</div>
+              <pre style={{ fontSize: 11, color: Z.textSoft, fontFamily: FONT_MONO, whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0, padding: "8px 10px", backgroundColor: Z.bgSubtle, borderRadius: 8 }}>
+                {call.request_summary}
+              </pre>
+            </div>
+          )}
+          {call.response_summary && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: Z.textFaint, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Response</div>
+              <pre style={{ fontSize: 11, color: Z.textSoft, fontFamily: FONT_MONO, whiteSpace: "pre-wrap", wordBreak: "break-all", margin: 0, padding: "8px 10px", backgroundColor: Z.bgSubtle, borderRadius: 8 }}>
+                {call.response_summary}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LiveApiCallsTab() {
+  const [data, setData] = useState<ApiCallsResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [paused, setPaused] = useState(false)
+  const [filter, setFilter] = useState<string>("all")
+
+  const fetchCalls = useCallback(async () => {
+    try {
+      const res = await fetch(api("/api/debug/api-calls?limit=100"))
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setData(await res.json())
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to fetch")
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchCalls()
+    if (paused) return
+    const t = setInterval(fetchCalls, 5000)
+    return () => clearInterval(t)
+  }, [fetchCalls, paused])
+
+  const calls = data?.calls ?? []
+  const filtered = filter === "all" ? calls : calls.filter(c => c.api === filter)
+  const apis = [...new Set(calls.map(c => c.api))]
+
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: Z.textFaint, textTransform: "uppercase", letterSpacing: "0.1em" }}>Filter:</span>
+          {["all", ...apis].map(a => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => setFilter(a)}
+              style={{
+                padding: "4px 10px",
+                borderRadius: 8,
+                border: `1px solid ${filter === a ? Z.blueBorder : Z.border}`,
+                backgroundColor: filter === a ? Z.blueSoft : Z.bgCard,
+                color: filter === a ? Z.blueDark : Z.textMid,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: "pointer",
+                fontFamily: FONT_HEADING,
+              }}
+            >
+              {a === "all" ? "All" : a}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {data?.stats && (
+            <span style={{ fontSize: 12, color: Z.textMid }}>
+              {data.stats.total} total calls &middot; {data.stats.errors} errors
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setPaused(!paused)}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 8,
+              border: `1px solid ${Z.border}`,
+              backgroundColor: paused ? Z.blueSoft : Z.bgCard,
+              color: paused ? Z.blueDark : Z.textMid,
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: "pointer",
+              fontFamily: FONT_HEADING,
+            }}
+          >
+            {paused ? "Resume" : "Pause"}
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <Card accent={Z.red}>
+          <P>Could not load API calls: {error}. Make sure the backend is running.</P>
+        </Card>
+      )}
+
+      {filtered.length === 0 && !error && (
+        <div style={{ textAlign: "center", padding: "60px 0", color: Z.textFaint }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>No API calls recorded yet</div>
+          <div style={{ fontSize: 12, marginTop: 8 }}>Run a search from the main page to see calls appear here in real time.</div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column-reverse" }}>
+        {filtered.map((call, i) => (
+          <ApiCallRow key={`${call.timestamp}-${i}`} call={call} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ── Configuration tab ───────────────────────────────────────────────── */
+
+function ConfigurationTab() {
+  const [config, setConfig] = useState<AppConfig | null>(null)
+  const [health, setHealth] = useState<Record<string, unknown> | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      fetch(api("/api/config")).then(r => r.ok ? r.json() : null),
+      fetch(api("/api/health")).then(r => r.ok ? r.json() : null),
+    ]).then(([c, h]) => {
+      setConfig(c)
+      setHealth(h)
+    }).catch(e => setError(e instanceof Error ? e.message : "Failed"))
+  }, [])
+
+  if (error) return <Card accent={Z.red}><P>Could not load config: {error}</P></Card>
+  if (!config) return <P>Loading configuration...</P>
+
+  type ConfigRow = { label: string; value: string; env?: string }
+  const rows: ConfigRow[] = [
+    { label: "City", value: config.city, env: "CITY" },
+    { label: "City (short)", value: config.cityShort, env: "CITY_SHORT" },
+    { label: "Default budget", value: `$${config.defaultBudget.toLocaleString()}`, env: "SEARCH_BUDGET" },
+    { label: "Reference point", value: `${config.referencePoint.name} (${config.referencePoint.lat}, ${config.referencePoint.lng})`, env: "REFERENCE_POINT_*" },
+    { label: "Map center", value: `${config.mapCenter.lat}, ${config.mapCenter.lng}`, env: "MAP_CENTER_*" },
+    { label: "Map zoom", value: String(config.mapZoom), env: "MAP_ZOOM" },
+    { label: "Aggregator stale days", value: `${config.staleness.aggregatorDays}d`, env: "STALE_AGGREGATOR_DAYS" },
+    { label: "Direct stale days", value: `${config.staleness.directDays}d`, env: "STALE_DIRECT_DAYS" },
+    { label: "Brand", value: config.brand.name, env: "BRAND_NAME" },
+    { label: "Tagline", value: config.brand.tagline, env: "BRAND_TAGLINE" },
+  ]
+
+  const rentFloorEntries = Object.entries(config.rentFloors).sort(([a], [b]) => Number(a) - Number(b))
+
+  return (
+    <div>
+      <H2>Runtime Configuration</H2>
+      <P>These values are loaded from the backend&apos;s environment variables on startup. They drive search behavior, scoring, and the UI.</P>
+
+      <Card>
+        <div style={{ display: "grid", gridTemplateColumns: "180px 1fr 140px", gap: "1px", fontSize: 13 }}>
+          <div style={{ padding: "8px 0", fontWeight: 700, color: Z.textFaint, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Setting</div>
+          <div style={{ padding: "8px 0", fontWeight: 700, color: Z.textFaint, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Value</div>
+          <div style={{ padding: "8px 0", fontWeight: 700, color: Z.textFaint, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.1em" }}>Env var</div>
+          {rows.map(r => (
+            <div key={r.label} style={{ display: "contents" }}>
+              <div style={{ padding: "6px 0", color: Z.text, fontWeight: 600 }}>{r.label}</div>
+              <div style={{ padding: "6px 0", color: Z.textSoft, fontFamily: FONT_MONO, fontSize: 12 }}>{r.value}</div>
+              <div style={{ padding: "6px 0" }}>{r.env && <Code>{r.env}</Code>}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <H2>Rent Floors</H2>
+      <P>Per-bedroom minimum rent for plausibility filtering. Listings below ~55% of these values are rejected.</P>
+      <Card>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          {rentFloorEntries.map(([beds, floor]) => (
+            <div key={beds} style={{ padding: "8px 14px", borderRadius: 10, backgroundColor: Z.bgSubtle, textAlign: "center" }}>
+              <div style={{ fontSize: 11, color: Z.textFaint, fontWeight: 700 }}>{beds === "0" ? "Studio" : `${beds}BR`}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: Z.text, fontFamily: FONT_HEADING }}>${Number(floor).toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <H2>Search Suggestions</H2>
+      <P>Pre-configured queries shown as chips on the search bar.</P>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {config.suggestions.map((s, i) => (
+          <Pill key={i}>{s}</Pill>
+        ))}
+      </div>
+
+      {health && (
+        <>
+          <H2>System Health</H2>
+          <Card>
+            <Block>{JSON.stringify(health, null, 2)}</Block>
+          </Card>
+        </>
+      )}
+    </div>
+  )
+}
+
+/* ── Page shell ──────────────────────────────────────────────────────── */
+
+export default function DocsPage() {
+  const [tab, setTab] = useState<TabId>("architecture")
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: Z.bgPage, color: Z.text, fontFamily: FONT_BODY }}>
@@ -327,245 +837,34 @@ export default function DocsPage() {
                 color: Z.textMid, textTransform: "uppercase",
               }}
             >
-              AI Search · Docs
+              How this was built
             </span>
           </div>
           <a href="/" style={{ fontSize: 12, fontWeight: 700, color: Z.blueDark, textDecoration: "none" }}>
-            ← back to demo
+            &#x2190; back to search
           </a>
         </div>
       </header>
 
       <main style={{ maxWidth: 1100, margin: "0 auto", padding: "32px 24px 80px" }}>
-        <section style={{ marginBottom: 40 }}>
+        <section style={{ marginBottom: 24 }}>
           <Pill>Reference</Pill>
           <div style={{ height: 16 }} />
-          <H1>How AI Search works</H1>
+          <H1>How this was built</H1>
           <p style={{ fontSize: "1.15rem", color: Z.textMid, lineHeight: 1.55, marginTop: 12, maxWidth: 720 }}>
-            A technical reference for the pipeline behind <Code>/demo</Code>. Every design choice
-            below was driven by a real failure mode we hit while building this. The
-            anti-patterns surfaced from auditing against{" "}
-            <a
-              href="https://github.com/parallel-web/parallel-cookbook/blob/main/task-best-practices.md"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: Z.blueDark, fontWeight: 600, textDecoration: "underline" }}
-            >
-              the Parallel cookbook
-            </a>
-            .
+            A technical reference for the pipeline, live visibility into every external API call,
+            and the runtime configuration driving this instance.
           </p>
         </section>
 
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px", gap: 40 }}>
-          <article>
-            <H2 id="overview">Overview</H2>
-            <P>Two flows feed listings into the catalog:</P>
-            <ul style={{ color: Z.textSoft, lineHeight: 1.8, fontSize: "0.95rem", paddingLeft: 24 }}>
-              <li><strong style={{ color: Z.text }}>User-driven discovery.</strong> User types natural language → backend translates into a Parallel FindAll run with explicit match conditions and 18 enrichments → matched candidates stream to the UI as they&apos;re verified.</li>
-              <li><strong style={{ color: Z.text }}>Always-on watch.</strong> A Parallel Monitor runs hourly with a saved query → events POSTed to the local poll loop → new findings persisted with <Code>details.via_monitor = true</Code>.</li>
-            </ul>
-            <P>Both flows write to the same SQLite catalog. The frontend hydrates from <Code>/api/listings</Code> on mount and polls every 30s, so Monitor-discovered listings show up without a page reload.</P>
+        <TabBar active={tab} onChange={setTab} />
 
-            <H2 id="pipeline">Pipeline</H2>
-            <P>Two flows feed the SQLite catalog. Both pass through their own guard chain before insert; the UI hydrates from the merged set.</P>
-            <ArchDiagram />
-
-            <H2 id="discovery">Discovery</H2>
-            <P>FindAll runs at the <Code>pro</Code> generator tier (env-overridable via <Code>FINDALL_GENERATOR</Code>). Match conditions are deliberately short and forgiving — strict conditions cause zero-match runs because the API can&apos;t always verify them from page text.</P>
-            <Card>
-              <H3>Match conditions (only 2)</H3>
-              <Block>{`is_rental_listing
-  → "individual rental property listing in or near {CITY}.
-     Reject any candidate whose URL is on these domains:
-     zillow.com, apartments.com, yelp.com.
-     Prefer the original landlord, broker, or property-management site."
-
-fits_budget
-  → "Asking monthly rent ≤ \${budget}.
-     If rent isn't shown, treat as matched (don't reject for missing data)."`}</Block>
-              <P>Bedroom count is <em>not</em> a match condition. We extract it via the <Code>bedrooms</Code> enrichment and post-filter against the user&apos;s requested minimum in <Code>_candidate_to_listing</Code>. This stops the &ldquo;I see &apos;3+ beds available&apos;&rdquo; miscue from sinking the whole match.</P>
-            </Card>
-
-            <H2 id="enrichment">Enrichment</H2>
-            <P>The API extracts 18 structured fields per match. Each description follows the cookbook&apos;s <strong style={{ color: Z.text }}>Entity → Action → Specifics → Error handling</strong> structure, and standardizes on an empty string as the universal &ldquo;page didn&apos;t say&rdquo; sentinel.</P>
-            <Card>
-              <H3>What we extract</H3>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, fontSize: 13, lineHeight: 1.7, color: Z.textMid }}>
-                <div>· <Code>street_address</Code></div>
-                <div>· <Code>monthly_rent_usd</Code></div>
-                <div>· <Code>bedrooms</Code></div>
-                <div>· <Code>bathrooms</Code></div>
-                <div>· <Code>square_feet</Code></div>
-                <div>· <Code>available_date</Code></div>
-                <div>· <Code>lease_term</Code></div>
-                <div>· <Code>pet_policy</Code></div>
-                <div>· <Code>is_furnished</Code></div>
-                <div>· <Code>utilities_included</Code></div>
-                <div>· <Code>parking_type</Code></div>
-                <div>· <Code>laundry_type</Code></div>
-                <div>· <Code>building_amenities</Code></div>
-                <div>· <Code>neighborhood</Code></div>
-                <div>· <Code>contact_phone</Code></div>
-                <div>· <Code>contact_email</Code></div>
-                <div>· <Code>is_currently_active</Code></div>
-                <div>· <Code>days_on_market</Code></div>
-              </div>
-              <P>The <Code>monthly_rent_usd</Code> description includes a defensive line: <em>&ldquo;do not confuse the rent with the street number, the zip code, the year built, or square footage.&rdquo;</em> This was added after we found listings like <Code>789 Page St</Code> getting saved with <Code>$789</Code> rent.</P>
-            </Card>
-
-            <H2 id="trust">Trust scoring</H2>
-            <P>For listings from untrusted sources, a Task-API call classifies them against five fact-based booleans. Score is computed in code from the true facts; the model never returns &ldquo;is this spam&rdquo; directly because that&apos;s exactly the kind of subjective output the cookbook calls out.</P>
-            <Card>
-              <H3>The five facts (weighted)</H3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 13.5, lineHeight: 1.6 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span><Code>demands_off_platform_payment</Code></span><Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">60 pts</Pill></div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span><Code>owner_claims_to_be_abroad</Code></span><Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">30 pts</Pill></div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span><Code>withholds_address_until_contact</Code></span><Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">25 pts</Pill></div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span><Code>no_in_person_viewing_offered</Code></span><Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">20 pts</Pill></div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}><span><Code>unusual_incentives</Code></span><Pill bg={Z.greenSoft} color={Z.green} border="#BAE0C2">15 pts</Pill></div>
-              </div>
-              <P>Any single canonical scam signal alone (off-platform payment) clears the 50-point hide threshold. Soft signals accumulate before tripping it. Listings from trusted sources (apartments, zillow, redfin, realtor, trulia, rent, hotpads) skip this call entirely.</P>
-            </Card>
-
-            <H2 id="monitor">Always-on watch</H2>
-            <P>A single Parallel Monitor runs at <Code>1h</Code> frequency with the <Code>base</Code> processor (Monitor accepts only <Code>lite</Code>/<Code>base</Code>). The query string explicitly excludes blocked domains. The local poll loop hits <Code>GET /v1/monitors/{"{id}"}/events</Code> every 60s for new events.</P>
-            <P>On the UI, click <strong>Watch this query</strong> in the monitor strip to cancel the existing Monitor and create a fresh one tracking your typed query. <Code>POST /api/monitor</Code> handles the swap; <Code>DELETE /api/monitor</Code> stops watching entirely.</P>
-            <Card accent={Z.blue}>
-              <H3>Each event includes</H3>
-              <Block>{`{
-  listing_url, title, address, neighborhood,
-  price, bedrooms, bathrooms, summary
-}`}</Block>
-              <P>Plus <Code>basis</Code> with citations per field — these power the &ldquo;Sources&rdquo; row on the listing card.</P>
-            </Card>
-
-            <H2 id="scoring">Result scoring</H2>
-            <P>Every listing gets a 0–100 score from three equally-weighted factors: recency, price fit, and proximity to the reference point. Each factor contributes at most 33 points. No single signal dominates ranking.</P>
-            <Card>
-              <H3>Bands</H3>
-              <Block>{`Recency (max 33)
-  < 24h:  +33
-  < 72h:  +24
-  < 168h: +14
-  else:   +5
-
-Price fit (max 33, U-curve)
-  ratio > 1.0:                                    +0   (over budget)
-  price < 60% of typical for this bedroom count:  +6   (suspect — likely parse error)
-  ratio ≤ 0.7:                                    +33  (good deal, realistic)
-  ratio 0.7-0.8:                                  +28
-  ratio 0.8-0.9:                                  +22
-  ratio 0.9-1.0:                                  +14  (top of budget)
-
-Proximity to reference point (max 33)
-  < 1 km:    +33
-  < 2.5 km:  +24
-  < 5 km:    +16
-  else:      +9`}</Block>
-            </Card>
-            <P>Strong-fit threshold is <Code>70/100</Code>. The UI hides everything below that bar by default; a toggle reveals the rest.</P>
-
-            <H2 id="quality">Quality controls</H2>
-            <Card accent={Z.red}>
-              <H3>Blocked domains</H3>
-              <P>Refused at three layers: FindAll match condition, Monitor query string, and an insert-time URL guard. Default blocklist:</P>
-              <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 8 }}>
-                <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>zillow.com</Pill>
-                <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>apartments.com</Pill>
-                <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>yelp.com</Pill>
-              </div>
-              <P>Override with the <Code>BLOCKED_DOMAINS</Code> env var.</P>
-            </Card>
-
-            <Card accent={Z.amber}>
-              <H3>Plausibility floors</H3>
-              <P>A per-bedroom rent floor catches listings where the model picked up the street number, zip code, or a deposit as the rent. Anything below ~55% of typical SF rent for the bed count is rejected at insert time.</P>
-              <Block>{`Studio: $1,045    1BR: $1,485    2BR: $1,980
-3BR:    $2,860    4BR: $3,575    5+BR: $4,400
-unknown beds: $1,500 absolute floor
-
-Plus: if parsed price exactly matches any number in the
-street address, reject. (Catches "789 Page St → $789" and
-"Unit S30414, 1475 Fillmore St → $1,475" alike.)`}</Block>
-            </Card>
-
-            <Card accent={Z.amber}>
-              <H3>Stale-results filter</H3>
-              <P>Aggregator sites keep listings live in their index after the unit is rented. Tiered freshness windows by source:</P>
-              <Block>{`Aggregators (apartments, trulia, hotpads, padmapper,
-              rentcafe, rent, showcase): > 14 days = stale
-Direct/curated (craigslist, redfin, compass,
-              realtor, web): > 45 days = stale
-API-derived signal wins when present:
-  details.is_currently_active === false → stale
-  details.days_on_market past tier window → stale`}</Block>
-              <P>Stale results are hidden by default; a toggle below the list reveals them. Each card in the visible-stale view gets a <Pill bg={Z.amberSoft} color={Z.amber} border="#F7D9A8">stale?</Pill> chip.</P>
-            </Card>
-
-            <H2 id="config">Configuration</H2>
-            <P>All knobs are environment variables in <Code>.env</Code>:</P>
-            <Block>{`# Search defaults
-SEARCH_QUERY=apartments for rent in San Francisco
-SEARCH_BUDGET=7500
-SEARCH_BEDROOMS=3
-
-# Reference point (proximity scoring)
-REFERENCE_POINT_NAME=Caltrain · 4th & King
-REFERENCE_POINT_LAT=37.7764
-REFERENCE_POINT_LNG=-122.3973
-
-# Always-on watch
-MONITOR_FREQUENCY=1h               # 1h / 6h / 1d / 1w / 30d
-MONITOR_PROCESSOR=base             # only 'lite' or 'base' supported by Parallel
-MONITOR_POLL_SECONDS=60
-MONITOR_INCLUDE_BACKFILL=true
-
-# Processor tiers (user has unlimited spend)
-TASK_SPAM_PROCESSOR=pro            # spam classification
-FINDALL_GENERATOR=pro              # discovery search
-
-# Domains we don't want results from
-BLOCKED_DOMAINS=zillow.com,apartments.com,yelp.com
-
-# Auth
-INTERNAL_API_KEY=                  # blank = local dev (auth bypassed)`}</Block>
-
-            <H2 id="cookbook">Cookbook fixes</H2>
-            <P>Five anti-patterns from <em>parallel-cookbook/task-best-practices.md</em> were live in this codebase at one point. All applied:</P>
-
-            <Card>
-              <H3>1. Subjective output → fact-based decomposition</H3>
-              <P>The original spam schema asked for <Code>is_likely_spam: bool</Code> + <Code>spam_confidence: float</Code> — a textbook subjective field. Replaced with five fact-based booleans the API can verify with citations, then weighted in code.</P>
-            </Card>
-
-            <Card>
-              <H3>2. Don&apos;t ask for <Code>rationale</Code> / <Code>confidence</Code></H3>
-              <P>The cookbook is explicit: reasoning and confidence are returned in the Task API&apos;s per-field <Code>basis</Code> array — no need to re-emit them in the schema. Both fields removed; they cost tokens for duplicates.</P>
-            </Card>
-
-            <Card>
-              <H3>3. <Code>required</Code> arrays must include all properties</H3>
-              <P>Schemas now mark every property as required and set <Code>additionalProperties: false</Code>.</P>
-            </Card>
-
-            <Card>
-              <H3>4. Standardized error-handling sentinel</H3>
-              <P>Every enrichment description ends with <em>&ldquo;return an empty string&rdquo;</em> when the page lacks the data. Killed the inconsistent fallbacks (<Code>N/A</Code>, <Code>null</Code>, <Code>&ldquo;Not specified&rdquo;</Code>, <Code>&ldquo;Unknown&rdquo;</Code>) we were defending against in <Code>_NA_VALUES</Code>.</P>
-            </Card>
-
-            <Card>
-              <H3>5. Cookbook-canonical Entity → Action → Specifics → Error</H3>
-              <P>Every one of the 18 enrichment descriptions follows that four-part structure. The <Code>monthly_rent_usd</Code> description is the most load-bearing — its &ldquo;do not confuse with the street number&rdquo; line directly fixed the parse-miscue class of bugs.</P>
-            </Card>
-
-          </article>
-
-          <TableOfContents activeId={activeId} />
-        </div>
+        {tab === "architecture" && <ArchitectureTab />}
+        {tab === "api-calls" && <LiveApiCallsTab />}
+        {tab === "configuration" && <ConfigurationTab />}
 
         <footer style={{ marginTop: 80, paddingTop: 24, borderTop: `1px solid ${Z.border}`, fontSize: 12, color: Z.textFaint }}>
-          Demo · Not affiliated with Zillow Group, Inc. · Search powered by{" "}
+          Demo &middot; Search powered by{" "}
           <a
             href="https://parallel.ai" target="_blank" rel="noopener noreferrer"
             style={{ color: Z.blueDark, fontWeight: 600 }}

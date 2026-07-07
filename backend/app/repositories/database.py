@@ -49,6 +49,12 @@ def get_db() -> sqlite3.Connection:
     if "details" not in cols:
         conn.execute("ALTER TABLE listings ADD COLUMN details TEXT NOT NULL DEFAULT '{}'")
         conn.commit()
+    if "match_basis" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN match_basis TEXT NOT NULL DEFAULT '[]'")
+        conn.commit()
+    if "citations" not in cols:
+        conn.execute("ALTER TABLE listings ADD COLUMN citations TEXT NOT NULL DEFAULT '[]'")
+        conn.commit()
 
     _connection = conn
     return conn

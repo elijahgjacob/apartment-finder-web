@@ -32,6 +32,8 @@ def in_memory_db(monkeypatch):
             phone         TEXT,
             body          TEXT,
             details       TEXT NOT NULL DEFAULT '{}',
+            match_basis   TEXT NOT NULL DEFAULT '[]',
+            citations     TEXT NOT NULL DEFAULT '[]',
             listed_at     TEXT NOT NULL DEFAULT (datetime('now')),
             fetched_at    TEXT NOT NULL DEFAULT (datetime('now')),
             is_active     INTEGER NOT NULL DEFAULT 1

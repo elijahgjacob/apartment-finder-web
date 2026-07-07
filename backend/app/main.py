@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -15,6 +16,12 @@ from .services.monitor_service import ensure_monitor, poll_once as monitor_poll_
 from .services.parallel_client import ParallelClient
 from .routes import api_router
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s  %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("apt-finder")
 
 _bg_lock = asyncio.Lock()
 
@@ -23,7 +30,7 @@ def _backfill_geocodes():
     rows = get_ungeocoded_listings()
     if not rows:
         return
-    print(f"[geocode] Backfilling {len(rows)} listings…")
+    logger.info("Backfilling geocodes for %d listings", len(rows))
     for row in rows:
         addr = row["address"] or row["title"] or ""
         if not addr:
@@ -31,9 +38,9 @@ def _backfill_geocodes():
         coords = geocode_address(addr)
         if coords:
             update_listing_geocode(row["id"], coords[0], coords[1])
-            print(f"[geocode] {addr} → {coords[0]:.4f}, {coords[1]:.4f}")
+            logger.debug("Geocoded %s → %.4f, %.4f", addr, coords[0], coords[1])
         else:
-            print(f"[geocode] {addr} → not found")
+            logger.debug("Geocode not found for %s", addr)
 
 
 async def _monitor_poll_loop():
@@ -43,7 +50,7 @@ async def _monitor_poll_loop():
     await asyncio.sleep(2)
     api_key = os.environ.get("PARALLEL_API_KEY")
     if not api_key:
-        print("[monitor] PARALLEL_API_KEY not set — monitor loop disabled")
+        logger.warning("PARALLEL_API_KEY not set — monitor loop disabled")
         return
 
     while True:
@@ -63,7 +70,7 @@ async def _monitor_poll_loop():
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            print(f"[monitor] loop error: {e}; retrying in 30s")
+            logger.error("Monitor loop error: %s; retrying in 30s", e)
             await asyncio.sleep(30)
 
 
@@ -78,7 +85,7 @@ app = FastAPI(title=APP_TITLE, lifespan=lifespan)
 
 _allowed = os.environ.get(
     "ALLOWED_ORIGINS",
-    "http://localhost:5173,http://127.0.0.1:5173",
+    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173",
 ).split(",")
 app.add_middleware(
     CORSMiddleware,
