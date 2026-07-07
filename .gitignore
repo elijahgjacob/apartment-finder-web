@@ -5,7 +5,7 @@ dist/
 .venv/
 venv/
 .env
-data/*.db
+data/
 .DS_Store
 node_modules/
 frontend/dist/
