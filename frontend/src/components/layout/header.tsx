@@ -46,7 +46,7 @@ export function Header({ config }: HeaderProps) {
           className="text-xs font-bold hover:underline"
           style={{ color: Z.blueDark }}
         >
-          How it works →
+          How this was built →
         </a>
       </div>
     </header>

@@ -28,6 +28,8 @@ def _listing_to_dict(l: Listing) -> dict:
         "spam_score": l.spam_score,
         "body": l.body,
         "details": safe_details,
+        "match_basis": l.match_basis or [],
+        "citations": l.citations or [],
         "score": l.score,
         "listed_at": l.listed_at.isoformat() if l.listed_at else None,
         "fetched_at": l.fetched_at.isoformat() if l.fetched_at else None,

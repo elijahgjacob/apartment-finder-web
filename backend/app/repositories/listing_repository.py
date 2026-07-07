@@ -32,8 +32,10 @@ def save_listing(listing_data: dict) -> str | None:
         """INSERT OR REPLACE INTO listings
            (id, source, title, url, price, bedrooms, bathrooms, sqft,
             address, neighborhood, lat, lng, has_parking, has_laundry,
-            spam_score, spam_flags, phone, body, details, listed_at, fetched_at, is_active)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            spam_score, spam_flags, phone, body, details,
+            match_basis, citations,
+            listed_at, fetched_at, is_active)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             listing_id,
             listing_data.get("source", "web"),
@@ -54,6 +56,8 @@ def save_listing(listing_data: dict) -> str | None:
             listing_data.get("phone"),
             listing_data.get("body"),
             json.dumps(listing_data.get("details") or {}),
+            json.dumps(listing_data.get("match_basis") or []),
+            json.dumps(listing_data.get("citations") or []),
             now,
             now,
             1,
@@ -69,7 +73,9 @@ def get_active_listings(budget: int, show_spam: bool, spam_hide_threshold: int):
         """
         SELECT id, source, title, url, price, bedrooms, bathrooms, sqft,
                address, neighborhood, lat, lng, has_parking, has_laundry,
-               spam_score, spam_flags, phone, body, details, listed_at, fetched_at
+               spam_score, spam_flags, phone, body, details,
+               match_basis, citations,
+               listed_at, fetched_at
           FROM listings
          WHERE is_active = 1
            AND (? IS NULL OR price IS NULL OR price <= ?)

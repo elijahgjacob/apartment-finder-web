@@ -34,6 +34,15 @@ def _row_to_listing(r: Any) -> Listing:
         details = json.loads(raw_details or "{}")
     except (TypeError, ValueError):
         details = {}
+    try:
+        match_basis = json.loads(r["match_basis"] or "[]") if "match_basis" in keys else []
+    except (TypeError, ValueError):
+        match_basis = []
+    try:
+        citations = json.loads(r["citations"] or "[]") if "citations" in keys else []
+    except (TypeError, ValueError):
+        citations = []
+
     return Listing(
         id=r["id"],
         source=r["source"],
@@ -56,6 +65,8 @@ def _row_to_listing(r: Any) -> Listing:
         details=details,
         listed_at=_parse_dt(r["listed_at"]),
         fetched_at=_parse_dt(r["fetched_at"]),
+        match_basis=match_basis,
+        citations=citations,
     )
 
 

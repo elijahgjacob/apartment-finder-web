@@ -27,4 +27,6 @@ class Listing:
     details: dict
     listed_at: datetime
     fetched_at: datetime
+    match_basis: list[dict] | None = None
+    citations: list[dict] | None = None
     score: int = 0

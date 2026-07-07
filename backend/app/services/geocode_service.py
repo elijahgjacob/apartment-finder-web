@@ -8,6 +8,7 @@ import json
 
 from ..config import CITY, GEO_COUNTRY, GEO_LAT_MIN, GEO_LAT_MAX, GEO_LNG_MIN, GEO_LNG_MAX
 from ..utils.parsing import _clean_address
+from .api_logger import log_call
 
 _last_request_time = 0.0
 _MIN_INTERVAL = 1.1
@@ -16,9 +17,9 @@ _MIN_INTERVAL = 1.1
 def _query_nominatim(query: str) -> tuple[float, float] | None:
     global _last_request_time
 
-    elapsed = time.time() - _last_request_time
-    if elapsed < _MIN_INTERVAL:
-        time.sleep(_MIN_INTERVAL - elapsed)
+    elapsed_since = time.time() - _last_request_time
+    if elapsed_since < _MIN_INTERVAL:
+        time.sleep(_MIN_INTERVAL - elapsed_since)
 
     params = urllib.parse.urlencode({
         "q": query,
@@ -26,23 +27,43 @@ def _query_nominatim(query: str) -> tuple[float, float] | None:
         "limit": "1",
         "countrycodes": GEO_COUNTRY,
     })
-    url = f"https://nominatim.openstreetmap.org/search?{params}"
+    path = f"/search?{params}"
+    url = f"https://nominatim.openstreetmap.org{path}"
 
     req = urllib.request.Request(url, headers={
         "User-Agent": "ApartmentFinder/1.0 (apartment search app)",
     })
 
+    t0 = time.monotonic()
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
+            elapsed_ms = (time.monotonic() - t0) * 1000
             _last_request_time = time.time()
             data = json.loads(resp.read().decode())
+            log_call(
+                api="Geocode",
+                method="GET",
+                path=path[:120],
+                status_code=resp.status,
+                duration_ms=elapsed_ms,
+                request_summary=query,
+                response_summary=f"{len(data)} results" if data else "no results",
+            )
             if data:
                 lat = float(data[0]["lat"])
                 lon = float(data[0]["lon"])
                 if GEO_LAT_MIN < lat < GEO_LAT_MAX and GEO_LNG_MIN < lon < GEO_LNG_MAX:
                     return (lat, lon)
-    except Exception:
-        pass
+    except Exception as exc:
+        elapsed_ms = (time.monotonic() - t0) * 1000
+        log_call(
+            api="Geocode",
+            method="GET",
+            path=path[:120],
+            duration_ms=elapsed_ms,
+            request_summary=query,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
     return None
 
