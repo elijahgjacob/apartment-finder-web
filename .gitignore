@@ -1,11 +1,32 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 .venv/
 venv/
-.env
-data/
-.DS_Store
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Node
 node_modules/
-frontend/dist/
+.next/
+out/
+
+# Data
+data/
+*.db
+
+# Environment
+.env
+.env.local
+.env*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

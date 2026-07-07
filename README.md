@@ -1,70 +1,129 @@
-# SF Apartment Finder — Web
+# Apartment Finder Web
 
-AI-powered apartment search for San Francisco. Uses Parallel's FindAll API to discover and verify real listings, then streams results in real-time.
+AI-powered apartment search that discovers and verifies real listings using the Parallel API.
 
-## Setup
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/elijahgjacob/apartment-finder-web/actions/workflows/ci.yml/badge.svg)](https://github.com/elijahgjacob/apartment-finder-web/actions/workflows/ci.yml)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://python.org)
+[![Node 20](https://img.shields.io/badge/Node.js-20-green.svg)](https://nodejs.org)
 
-```bash
-# Backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+<!-- TODO: Add screenshot -->
 
-# Frontend
-cd frontend
-npm install
-cd ..
+## Architecture
 
-# Configure
-cp .env.example .env
-# Set PARALLEL_API_KEY in .env
+```mermaid
+graph LR
+    A[Frontend<br/>Next.js] <-->|REST + SSE| B[Backend<br/>FastAPI]
+    B <-->|FindAll API| C[Parallel API]
+    B <-->|Read/Write| D[(SQLite)]
 ```
 
-## Run (dev)
+The backend uses a **Routes-Controllers-Services-Repositories** (RCSR) pattern. The frontend is built with the **Next.js App Router**, React 19, and Tailwind CSS.
 
-Start both the API and the frontend dev server:
+## Features
+
+- **Automated search** — background loop discovers apartments across Zillow, Redfin, Apartments.com, Craigslist, and more
+- **AI verification** — each candidate is validated against configurable match conditions (beds, budget, location, availability)
+- **Real-time streaming** — results stream to the frontend via Server-Sent Events
+- **Interactive map** — browse verified listings on a Leaflet map
+- **Scoring engine** — listings scored 0-100 on recency, price fit, and commute distance
+- **Monitoring** — continuous watch for new listings matching saved criteria
+- **Manual search** — on-demand searches via the search bar
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js 20+
+- npm
+- A [Parallel API key](https://platform.parallel.ai)
+
+### Setup
 
 ```bash
-# Terminal 1 — FastAPI backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+git clone https://github.com/elijahgjacob/apartment-finder-web.git
+cd apartment-finder-web
 
-# Terminal 2 — Vite frontend
-cd frontend
-npm run dev
+# Install dependencies
+make install
+
+# Configure backend
+cp backend/.env.example backend/.env
+# Edit backend/.env and set PARALLEL_API_KEY
+
+# Start development servers
+make dev
 ```
 
-Open http://localhost:5173 (Vite proxies `/api/*` to FastAPI).
+The backend runs at http://localhost:8000 and the frontend at http://localhost:3000.
 
-## Stack
+## Project Structure
 
-- **Backend**: Python, FastAPI, SQLite
-- **Search**: Parallel FindAll API (`parallel-cli`) for structured entity discovery
-- **Frontend**: React, Vite, Tailwind CSS v4, shadcn/ui, Leaflet
-- **Streaming**: SSE (Server-Sent Events) for real-time progress + results
+```
+apartment-finder-web/
+├── backend/                 # FastAPI backend
+│   ├── app/
+│   │   ├── routes/          # HTTP route definitions
+│   │   ├── controllers/     # Request validation
+│   │   ├── services/        # Business logic + Parallel API
+│   │   ├── repositories/    # SQLite data access
+│   │   ├── models/          # Pydantic models
+│   │   ├── middleware/      # Auth, CORS
+│   │   └── utils/           # Helpers
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/                # Next.js frontend
+│   ├── src/
+│   │   ├── app/             # Pages and layouts
+│   │   ├── components/      # UI components
+│   │   ├── hooks/           # Custom React hooks
+│   │   ├── lib/             # API client, utilities
+│   │   ├── providers/       # Context providers
+│   │   └── types/           # TypeScript types
+│   ├── public/
+│   ├── next.config.ts
+│   └── package.json
+├── docker-compose.yml
+├── Makefile
+└── README.md
+```
 
-## How it works
+## Configuration
 
-1. On startup, a background loop searches for apartments every 5 minutes
-2. FindAll discovers candidates across Zillow, Redfin, Apartments.com, Craigslist, etc.
-3. Each candidate is verified against match conditions (beds, budget, location, availability)
-4. Verified listings stream to the frontend via SSE and appear on the map + cards
-5. Results persist in SQLite — the UI auto-refreshes every 30 seconds
-6. Manual searches are also supported via the search bar
+All backend configuration is via environment variables. See [`backend/.env.example`](backend/.env.example) for the full reference.
 
-## Environment
+Key variables:
 
-| Variable | Default | Description |
-|---|---|---|
-| `PARALLEL_API_KEY` | (required) | API key from parallel.ai |
-| `SEARCH_QUERY` | `3BR apartments for rent in San Francisco near Caltrain` | Default background search |
-| `SEARCH_BUDGET` | `7500` | Max monthly rent |
-| `SEARCH_INTERVAL_SECONDS` | `300` | Background search interval |
+| Variable | Description |
+|---|---|
+| `PARALLEL_API_KEY` | API key from platform.parallel.ai (required) |
+| `SEARCH_QUERY` | Default background search query |
+| `SEARCH_BUDGET` | Maximum monthly rent |
+| `SEARCH_INTERVAL_SECONDS` | Background search interval |
 
-## Scoring
+## Available Commands
 
-Each listing is scored 0–100 based on:
+| Command | Description |
+|---|---|
+| `make dev` | Run backend and frontend concurrently |
+| `make install` | Install all dependencies |
+| `make lint` | Lint backend and frontend |
+| `make test` | Run all tests |
+| `make fmt` | Auto-format all code |
+| `make build` | Build the frontend for production |
+| `make clean` | Remove build artifacts |
 
-- **Recency** (0–35): listed within 24h / 72h / 168h / older
-- **Price fit** (0–40): how far below the configured budget
-- **Distance to Caltrain** (0–25): via haversine from 4th & King
+## Deployment
+
+See [DEPLOY.md](DEPLOY.md) for deployment instructions including Docker Compose, Fly.io, and Vercel options.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR guidelines.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
