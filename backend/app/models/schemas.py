@@ -10,3 +10,5 @@ class MonitorReplaceRequest(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     budget: int = DEFAULT_BUDGET
+    city: str | None = None
+    requirements: str | None = None

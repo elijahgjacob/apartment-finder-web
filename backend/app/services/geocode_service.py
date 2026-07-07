@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 import json
 
-from ..config import CITY, GEO_COUNTRY, GEO_LAT_MIN, GEO_LAT_MAX, GEO_LNG_MIN, GEO_LNG_MAX
+from ..config import CITY, GEO_COUNTRY
 from ..utils.parsing import _clean_address
 from .api_logger import log_call
 
@@ -52,8 +52,7 @@ def _query_nominatim(query: str) -> tuple[float, float] | None:
             if data:
                 lat = float(data[0]["lat"])
                 lon = float(data[0]["lon"])
-                if GEO_LAT_MIN < lat < GEO_LAT_MAX and GEO_LNG_MIN < lon < GEO_LNG_MAX:
-                    return (lat, lon)
+                return (lat, lon)
     except Exception as exc:
         elapsed_ms = (time.monotonic() - t0) * 1000
         log_call(

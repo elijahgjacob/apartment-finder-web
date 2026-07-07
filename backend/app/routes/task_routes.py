@@ -11,7 +11,12 @@ router = APIRouter()
 
 @router.post("/api/tasks", dependencies=[Depends(require_internal_key)])
 async def create_search_task_route(body: SearchRequest):
-    return await create_search_task(query=body.query, budget=body.budget)
+    return await create_search_task(
+        query=body.query,
+        budget=body.budget,
+        city=body.city,
+        requirements=body.requirements,
+    )
 
 
 @router.get("/api/tasks/{task_id}/stream")

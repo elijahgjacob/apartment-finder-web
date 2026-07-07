@@ -5,6 +5,7 @@ import json
 import os
 import re
 import uuid
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import AsyncIterator
 
@@ -12,9 +13,10 @@ import httpx
 
 from ..config import (
     BLOCKED_DOMAINS,
-    CITY, CITY_SHORT,
+    CITY_SHORT,
     FINDALL_GENERATOR,
     LISTING_SITES,
+    RENT_FLOORS,
 )
 from ..models.task import Task, TaskStatus
 from ..repositories.listing_repository import save_listing
@@ -32,37 +34,53 @@ def _extract_min_beds(query: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
-_tasks: dict[str, Task] = {}
+# Bounded task registry. Search tasks live only long enough for the client
+# to open the SSE stream and drain events; keeping every task forever would
+# leak memory on a public deployment. Evict oldest once we exceed the cap.
+_MAX_TASKS = int(os.environ.get("MAX_TRACKED_TASKS", "200"))
+_tasks: "OrderedDict[str, Task]" = OrderedDict()
 
 
 def get_task(task_id: str) -> Task | None:
     return _tasks.get(task_id)
 
 
-def create_task(query: str, budget: int, min_beds: int | None = None) -> Task:
+def _register_task(task: Task) -> None:
+    _tasks[task.id] = task
+    while len(_tasks) > _MAX_TASKS:
+        _tasks.popitem(last=False)
+
+
+def create_task(
+    query: str,
+    budget: int,
+    min_beds: int | None = None,
+    city: str | None = None,
+    requirements: str | None = None,
+) -> Task:
     if min_beds is None:
         min_beds = _extract_min_beds(query)
-    task = Task(id=str(uuid.uuid4()), query=query, budget=budget, min_beds=min_beds)
-    _tasks[task.id] = task
+    task = Task(
+        id=str(uuid.uuid4()),
+        query=query,
+        budget=budget,
+        city=city or CITY_SHORT,
+        requirements=requirements,
+        min_beds=min_beds,
+    )
+    _register_task(task)
     return task
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-# Realistic monthly-rent floors by bedroom count, San Francisco-area.
-_RENT_FLOORS_SF: dict[int, int] = {
-    0: 1900, 1: 2700, 2: 3600, 3: 5200, 4: 6500, 5: 8000,
-}
-
-
 def _absolute_min_price(beds: int | None) -> int:
-    """Lower bound for plausibility checks. If we don't know the bed count,
-    use a global $1,500 floor (no real US rental is below this). If we do,
-    use 55% of the typical rent for that bedroom count — permissive enough
-    for genuine BMR units, strict enough to catch street-number miscues."""
+    """Lower bound for plausibility checks. Uses RENT_FLOORS from config
+    (env-overridable). If we don't know the bed count, use a $400 floor.
+    Otherwise use 55% of the configured floor for that bedroom count."""
     if beds is None:
-        return 1500
-    typical = _RENT_FLOORS_SF.get(beds) or _RENT_FLOORS_SF.get(min(beds, 5)) or 2000
+        return 400
+    typical = RENT_FLOORS.get(beds) or RENT_FLOORS.get(min(beds, 5)) or 800
     return int(typical * 0.55)
 
 
@@ -106,7 +124,7 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
         r"/apartments-under-\d+/$",
         r"/\d+-bedroom-apartments",
         r"/rentals$",
-        r"apartments/san-francisco",
+        r"/apartments/[a-z-]+(?:/|$)",
     ]
     for pat in search_page_patterns:
         if re.search(pat, url, re.IGNORECASE):
@@ -158,7 +176,7 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
         return None
 
     junk_patterns = [
-        r"^(san francisco|sf|ca|california)(\s|,|$)",
+        r"^[A-Z][a-z]+,?\s+[A-Z]{2}$",
         r"^[A-Z]{2}\s+\d{5}",
         r"^\$[\d,.]+",
         r"^\d{1,3}$",
@@ -280,11 +298,12 @@ def _candidate_to_listing(candidate: dict, min_beds: int | None = None) -> dict 
 
 # ── FindAll match conditions ─────────────────────────────────────────────
 
-def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
+def _match_conditions(min_beds: int | None, budget: int, city: str = "") -> list[dict]:
     """Keep the list short and forgiving. Strict conditions cause zero-match
     runs (FindAll can't always verify them from page text). We rely on
     enrichments for the actual data, and post-filter in _candidate_to_listing
     for hard rejections (bad URLs, missing addresses, wrong bedroom count)."""
+    city = city or CITY_SHORT
     blocked_clause = ""
     if BLOCKED_DOMAINS:
         listed = ", ".join(BLOCKED_DOMAINS)
@@ -296,7 +315,7 @@ def _match_conditions(min_beds: int | None, budget: int) -> list[dict]:
     return [
         {"name": "is_rental_listing",
          "description": (
-             f"The page is an individual rental property listing in or near {CITY_SHORT}. "
+             f"The page is an individual rental property listing in or near {city}. "
              "It advertises a specific unit available to rent. "
              "Not a search results page, not a news article, not a category index."
              + blocked_clause +
@@ -323,7 +342,7 @@ def _enrichments() -> list[dict]:
          "description": (
              "Entity: this rental listing's unit address. "
              "Action: extract the exact street address as written on the page. "
-             "Specifics: include unit/apt number if shown (e.g. '1234 Mission St #4'); "
+             "Specifics: include unit/apt number if shown (e.g. '123 Main St #4'); "
              "do not include city, state, or zip. "
              "If only a neighborhood or no street address is shown, return an empty string."
          )},
@@ -431,7 +450,7 @@ def _enrichments() -> list[dict]:
          "description": (
              "Entity: the city neighborhood of this unit. "
              "Action: extract the specific neighborhood name. "
-             "Specifics: a single name like 'Mission', 'SoMa', 'Hayes Valley'; "
+             "Specifics: a single name like 'Downtown', 'Midtown', 'Old Town'; "
              "do not return the city or zip code. "
              "If only the city is mentioned, return an empty string."
          )},
@@ -439,7 +458,7 @@ def _enrichments() -> list[dict]:
          "description": (
              "Entity: the contact for this listing. "
              "Action: extract a phone number to inquire about the unit. "
-             "Specifics: plain digits with separators (e.g. '(415) 555-1234'). "
+             "Specifics: plain digits with separators (e.g. '(555) 555-1234'). "
              "If no phone number is shown on the page, return an empty string."
          )},
         {"name": "contact_email",
@@ -484,14 +503,17 @@ async def run_task(task: Task) -> None:
         task._push({"event": "error", "message": "PARALLEL_API_KEY is not set — add it to .env"})
         return
 
+    city = task.city or CITY_SHORT
     beds_str = f"{task.min_beds} bedroom " if task.min_beds else ""
     objective = (
         f"Find {beds_str}apartments for rent "
         f"under {task.budget} dollars per month "
-        f"in {CITY_SHORT}"
+        f"in {city}"
     )
-    if task.query and CITY_SHORT.lower() not in task.query.lower():
+    if task.query and city.lower() not in task.query.lower():
         objective += f". {task.query}"
+    if task.requirements:
+        objective += f". Requirements: {task.requirements}"
 
     try:
         async with ParallelClient(api_key=api_key) as client:
@@ -504,7 +526,7 @@ async def run_task(task: Task) -> None:
             run_data = await client.findall_create(
                 objective=objective,
                 entity_type="apartment rental listings",
-                match_conditions=_match_conditions(task.min_beds, task.budget),
+                match_conditions=_match_conditions(task.min_beds, task.budget, city),
                 enrichments=_enrichments(),
                 generator=FINDALL_GENERATOR,
                 match_limit=25,
@@ -561,6 +583,9 @@ async def run_task(task: Task) -> None:
             for c in matched_candidates:
                 l = _candidate_to_listing(c, min_beds=task.min_beds)
                 if l:
+                    # Record which city this search targeted so geocoding can
+                    # resolve the (city-less) street address to the right place.
+                    l.setdefault("details", {})["search_city"] = city
                     listings.append(l)
 
             if listings:

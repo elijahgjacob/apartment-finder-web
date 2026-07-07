@@ -44,7 +44,7 @@ _MONITOR_OUTPUT_SCHEMA = {
         },
         "title": {
             "type": "string",
-            "description": "Short title for the listing (e.g. '3BR in Mission').",
+            "description": "Short title for the listing (e.g. '3BR near downtown').",
         },
         "address": {
             "type": "string",
@@ -248,6 +248,7 @@ def _event_to_listing(event: dict) -> dict | None:
             "via_monitor": True,
             "monitor_event_date": event.get("event_date"),
             "monitor_summary": summary,
+            "search_city": CITY_SHORT,
         },
         "spam_score": 0,
         "spam_flags": [],

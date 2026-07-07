@@ -89,7 +89,7 @@ def get_active_listings(budget: int, show_spam: bool, spam_hide_threshold: int):
 def get_ungeocoded_listings():
     db = get_db()
     return db.execute(
-        "SELECT id, address, title FROM listings WHERE lat IS NULL AND is_active = 1"
+        "SELECT id, address, title, details FROM listings WHERE lat IS NULL AND is_active = 1"
     ).fetchall()
 
 

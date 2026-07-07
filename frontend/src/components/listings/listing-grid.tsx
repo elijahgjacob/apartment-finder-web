@@ -31,6 +31,19 @@ export function ListingGrid({
   return (
     <div className="space-y-4">
       {listings.length === 0 && streaming && (<><SkeletonCard /><SkeletonCard /><SkeletonCard /></>)}
+      {listings.length === 0 && !streaming && (
+        <div
+          className="rounded-2xl p-8 text-center"
+          style={{ backgroundColor: Z.bgCard, border: `1px dashed ${Z.border}` }}
+        >
+          <p className="text-sm font-semibold mb-1" style={{ color: Z.text }}>
+            No matching listings found
+          </p>
+          <p className="text-sm" style={{ color: Z.textMid }}>
+            Try a broader query, a higher budget, or a different area{city ? ` in ${city}` : ""}.
+          </p>
+        </div>
+      )}
       {listings.map((l, i) => (
         <ListingCard
           key={l.id} l={l} idx={i} city={city}
