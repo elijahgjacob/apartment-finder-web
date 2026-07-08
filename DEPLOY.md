@@ -2,8 +2,8 @@
 
 Two pieces to deploy:
 
-- **Backend** (`backend/`) — FastAPI + SQLite + long-running Monitor loop. Needs a persistent container host.
-- **Frontend** (`frontend/`) — Next.js application. Can deploy to Vercel or any Node.js host.
+- **Backend** (`backend/`) — FastAPI. **Stateless**: no database, no background loops, nothing to persist. Each search runs live and streams results over SSE.
+- **Frontend** (`frontend/`) — Next.js application. Deploy to Vercel or any Node.js host.
 
 ## Option 1: Docker Compose (simplest)
 
@@ -24,13 +24,13 @@ docker-compose up --build
 
 ### Backend — Container Host
 
-The backend cannot run on serverless platforms because:
+The backend keeps no state, so there's no volume to attach. The one constraint
+is that a search streams for up to ~16 minutes over a single SSE connection, so
+the host must allow long-lived responses (most serverless platforms with short
+request timeouts are not a good fit).
 
-- SQLite needs a persistent filesystem.
-- The Monitor poll loop runs continuously.
-- FindAll searches can run for ~12 minutes (90 polls x 8s).
-
-Pick a container host: **Fly.io** (recommended), Railway, Render, or Heroku.
+Pick a host that supports long-running requests: **Fly.io** (recommended),
+Railway, Render, or a plain VM.
 
 #### Fly.io
 
@@ -41,15 +41,13 @@ fly secrets set \
     PARALLEL_API_KEY=... \
     INTERNAL_API_KEY=... \
     ALLOWED_ORIGINS=https://your-frontend.vercel.app
-fly volumes create data --size 1
 fly deploy
 ```
 
-Mount the volume at `/backend/data` and set `SQLITE_PATH=/backend/data/listings.db`.
-
 #### Other Hosts
 
-Same pattern: build from `backend/Dockerfile`, mount a volume for `data/`, set the environment variables.
+Same pattern: build from `backend/Dockerfile`, set the environment variables.
+No volumes required.
 
 ### Frontend — Vercel
 
@@ -71,9 +69,8 @@ vercel deploy --prod   # redeploy to pick up the new env var
 | Variable | Required | Description |
 |---|---|---|
 | `PARALLEL_API_KEY` | Yes | API key from platform.parallel.ai |
-| `INTERNAL_API_KEY` | No | If set, gates POST/DELETE endpoints |
+| `INTERNAL_API_KEY` | No | If set, gates `POST /api/tasks` via the `x-api-key` header |
 | `ALLOWED_ORIGINS` | Yes (prod) | Comma-separated allowed CORS origins |
-| `SQLITE_PATH` | No | Path to DB file (default: `./data/listings.db`) |
 | `NEXT_PUBLIC_API_BASE` | Yes (prod) | Backend URL for the frontend |
 
 See `backend/.env.example` for all backend configuration options.
@@ -85,8 +82,11 @@ curl https://your-backend.fly.dev/api/health
 curl https://your-frontend.vercel.app
 ```
 
-## Limitations
+## Notes
 
-- SQLite runs on a single attached volume — no horizontal scaling. Swap for Postgres/Turso for HA.
-- In-flight searches live in process memory. A restart drops them.
-- Read-only endpoints (`GET /api/listings`, `GET /api/monitor`) have no auth by default.
+- **Stateless by design.** The server stores nothing between requests. A restart
+  drops only in-flight searches; there is no data to lose.
+- **Saved targets are client-side.** A user's shortlist is kept in their own
+  browser (localStorage) and never sent to the server.
+- Horizontal scaling is trivial — run as many stateless backend instances as you
+  like behind a load balancer.

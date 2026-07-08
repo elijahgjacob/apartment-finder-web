@@ -4,14 +4,11 @@ import { useState, useCallback, useMemo, useRef } from "react"
 import dynamic from "next/dynamic"
 import { useConfigState } from "@/providers/config-provider"
 import { useSearch } from "@/hooks/use-search"
-import { useListings } from "@/hooks/use-listings"
-import { useMonitor } from "@/hooks/use-monitor"
-import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useSavedTargets } from "@/hooks/use-saved-targets"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { SearchBar } from "@/components/search/search-bar"
 import { SearchSuggestions } from "@/components/search/search-suggestions"
-import { MonitorStrip } from "@/components/monitor/monitor-strip"
 import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
@@ -144,7 +141,6 @@ export default function DemoApp() {
 function DemoAppInner({ config }: { config: AppConfig }) {
   const [city, setCity] = useState(config.cityShort)
   const [requirements, setRequirements] = useState("")
-  const { lastSeenAt, markAllSeen } = useLocalStorage("parallel-demo-lastSeenAt")
 
   const [view, setView] = useState<ViewMode>("list")
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -152,9 +148,11 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const {
     query, setQuery,
-    reasoning, streaming, listings, newIds, error, done,
-    startSearch, mergeListings, setError,
+    reasoning, streaming, listings, error, done,
+    startSearch,
   } = useSearch()
+
+  const { saved, isSaved, toggleSave, clearSaved } = useSavedTargets()
 
   const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
@@ -165,14 +163,6 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const isStale = useMemo(() => makeIsStale(config.staleness), [config.staleness])
 
-  useListings(done, mergeListings, city)
-
-  const {
-    monitor, monitorBusy,
-    watchOnSubmit, setWatchOnSubmit,
-    watchThisQuery, stopBackendMonitor,
-  } = useMonitor(query)
-
   const handleMarkerClick = useCallback((id: string) => {
     setHoveredId(id)
     const el = cardListRef.current?.querySelector(`[data-listing-id="${id}"]`)
@@ -181,12 +171,8 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setView("list")
     startSearch(query, effectiveBudget, { city, requirements: requirements || undefined })
-    if (watchOnSubmit) {
-      void watchThisQuery().then((err) => {
-        if (err) setError(err)
-      })
-    }
   }
 
   const STRONG_FIT_THRESHOLD = 70
@@ -216,20 +202,18 @@ function DemoAppInner({ config }: { config: AppConfig }) {
     [sortedListings, showAllScores, isStale],
   )
 
-  const visibleListings = filteredListings
-
-  const isNewSinceLastVisit = useCallback((l: Listing) => {
-    const t = l.fetched_at ? new Date(l.fetched_at).getTime() : 0
-    return t > lastSeenAt
-  }, [lastSeenAt])
-
-  const newSinceLastVisitCount = useMemo(
-    () => visibleListings.filter(isNewSinceLastVisit).length,
-    [visibleListings, isNewSinceLastVisit],
+  const savedSorted = useMemo(
+    () => [...saved].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+    [saved],
   )
+
+  const showingSaved = view === "saved"
+  const visibleListings = showingSaved ? savedSorted : filteredListings
 
   const floor = useMemo(() => realisticFloor(parsedBeds, config.rentFloors), [parsedBeds, config.rentFloors])
   const budgetLikelyTooLow = floor != null && parsedBudget != null && parsedBudget < floor
+
+  const hasActivity = streaming || !!reasoning || listings.length > 0 || saved.length > 0
 
   return (
     <div
@@ -281,9 +265,6 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             onRequirementsChange={setRequirements}
             onSubmit={onSubmit}
             streaming={streaming}
-            monitorBusy={monitorBusy}
-            watchOnSubmit={watchOnSubmit}
-            onWatchChange={setWatchOnSubmit}
           />
 
           <SearchSuggestions
@@ -302,12 +283,6 @@ function DemoAppInner({ config }: { config: AppConfig }) {
       </section>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
-        <MonitorStrip
-          monitor={monitor}
-          busy={monitorBusy}
-          onStop={stopBackendMonitor}
-        />
-
         {error && (
           <div
             className="rounded-xl p-4 mb-6 text-sm font-medium"
@@ -317,37 +292,63 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           </div>
         )}
 
-        {(streaming || reasoning || listings.length > 0) ? (
+        {hasActivity ? (
           <>
-            {newSinceLastVisitCount > 0 && (
-              <div
-                className="mb-4 rounded-2xl px-4 py-3 flex items-center gap-3"
-                style={{ backgroundColor: Z.blueSoft, border: `1px solid ${Z.blueBorder}` }}
-              >
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ backgroundColor: Z.blue }} />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ backgroundColor: Z.blue }} />
-                </span>
-                <span className="text-sm flex-1" style={{ color: Z.blueDarker }}>
-                  <strong style={{ fontFamily: FONT_HEADING }}>{newSinceLastVisitCount}</strong> new {newSinceLastVisitCount === 1 ? "listing" : "listings"} since your last visit
-                </span>
-                <button
-                  type="button"
-                  onClick={markAllSeen}
-                  className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:bg-white"
-                  style={{ color: Z.blueDark, border: `1px solid ${Z.blueBorder}`, fontFamily: FONT_HEADING, backgroundColor: "white" }}
-                >
-                  Mark all seen
-                </button>
-              </div>
-            )}
-
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
-                <StatsBar listings={visibleListings} newCount={newIds.size} monitoring={!!monitor?.active} />
+                <StatsBar listings={visibleListings} />
               </div>
-              <ViewToggle view={view} onChange={setView} />
+              <ViewToggle view={view} onChange={setView} savedCount={saved.length} />
             </div>
+
+            {showingSaved && (
+              <div ref={cardListRef}>
+                {savedSorted.length === 0 ? (
+                  <div
+                    className="rounded-2xl p-8 text-center"
+                    style={{ backgroundColor: Z.bgCard, border: `1px dashed ${Z.border}` }}
+                  >
+                    <p className="text-sm font-semibold mb-1" style={{ color: Z.text }}>No saved targets yet</p>
+                    <p className="text-sm" style={{ color: Z.textMid }}>
+                      Run a search and hit <strong>Save</strong> on the apartments you want to keep. They&apos;re stored only in this browser.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-3 flex items-center justify-between">
+                      <span className="text-sm" style={{ color: Z.textMid }}>
+                        {savedSorted.length} saved {savedSorted.length === 1 ? "target" : "targets"} · kept in this browser only
+                      </span>
+                      <button
+                        type="button"
+                        onClick={clearSaved}
+                        className="text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+                        style={{ color: Z.textMid, border: `1px solid ${Z.border}`, fontFamily: FONT_HEADING }}
+                      >
+                        Clear all
+                      </button>
+                    </div>
+                    <ListingGrid
+                      listings={savedSorted}
+                      city={city}
+                      isStale={isStale}
+                      isSaved={isSaved}
+                      onToggleSave={toggleSave}
+                      hoveredId={hoveredId}
+                      onHover={(id) => setHoveredId(id)}
+                      onLeave={() => setHoveredId(null)}
+                      streaming={false}
+                      hiddenLowScoreCount={0}
+                      hiddenStaleCount={0}
+                      showAllScores
+                      showStale
+                      onToggleScores={() => {}}
+                      onToggleStale={() => {}}
+                    />
+                  </>
+                )}
+              </div>
+            )}
 
             {view === "list" && (
               <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
@@ -356,9 +357,9 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                   <ListingGrid
                     listings={visibleListings}
                     city={city}
-                    newIds={newIds}
-                    isNewSinceLastVisit={isNewSinceLastVisit}
                     isStale={isStale}
+                    isSaved={isSaved}
+                    onToggleSave={toggleSave}
                     hoveredId={hoveredId}
                     onHover={(id) => setHoveredId(id)}
                     onLeave={() => setHoveredId(null)}
@@ -424,13 +425,16 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
   )
 }
 
-function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
+function ViewToggle({ view, onChange, savedCount }: { view: ViewMode; onChange: (v: ViewMode) => void; savedCount: number }) {
   const opts: { value: ViewMode; label: string; icon: React.ReactNode }[] = [
     { value: "list", label: "List", icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg>
     )},
     { value: "map", label: "Map", icon: (
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2Z"/><line x1="9" y1="4" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="20"/></svg>
+    )},
+    { value: "saved", label: savedCount > 0 ? `Saved ${savedCount}` : "Saved", icon: (
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
     )},
   ]
   return (

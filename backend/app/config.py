@@ -15,10 +15,6 @@ MAP_ZOOM = int(os.environ.get("MAP_ZOOM", "13"))
 
 DEFAULT_BUDGET = int(os.environ.get("SEARCH_BUDGET", "5000"))
 DEFAULT_QUERY = os.environ.get("SEARCH_QUERY", f"apartments for rent in {CITY_SHORT}")
-SEARCH_INTERVAL = int(os.environ.get("SEARCH_INTERVAL_SECONDS", "300"))
-SEARCH_BEDROOMS = os.environ.get("SEARCH_BEDROOMS", "")
-
-SPAM_HIDE_THRESHOLD = int(os.environ.get("SPAM_HIDE_THRESHOLD", "50"))
 
 LISTING_SITES = os.environ.get(
     "LISTING_SITES",
@@ -35,10 +31,6 @@ BLOCKED_DOMAINS = tuple(
 )
 
 GEO_COUNTRY = os.environ.get("GEO_COUNTRY", "us")
-GEO_LAT_MIN = float(os.environ.get("GEO_LAT_MIN", "37.5"))
-GEO_LAT_MAX = float(os.environ.get("GEO_LAT_MAX", "38.0"))
-GEO_LNG_MIN = float(os.environ.get("GEO_LNG_MIN", "-122.6"))
-GEO_LNG_MAX = float(os.environ.get("GEO_LNG_MAX", "-122.3"))
 
 APP_TITLE = os.environ.get("APP_TITLE", "Apartment Finder")
 
@@ -81,11 +73,6 @@ AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
 
 STALE_AGGREGATOR_DAYS = int(os.environ.get("STALE_AGGREGATOR_DAYS", "14"))
 STALE_DIRECT_DAYS = int(os.environ.get("STALE_DIRECT_DAYS", "45"))
-
-MONITOR_FREQUENCY = os.environ.get("MONITOR_FREQUENCY", "1h")
-MONITOR_PROCESSOR = os.environ.get("MONITOR_PROCESSOR", "base")
-MONITOR_POLL_SECONDS = int(os.environ.get("MONITOR_POLL_SECONDS", "60"))
-MONITOR_INCLUDE_BACKFILL = os.environ.get("MONITOR_INCLUDE_BACKFILL", "true").lower() == "true"
 
 TASK_SPAM_PROCESSOR = os.environ.get("TASK_SPAM_PROCESSOR", "pro")
 

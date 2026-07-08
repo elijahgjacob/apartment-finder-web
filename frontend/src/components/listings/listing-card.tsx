@@ -6,19 +6,6 @@ import { MatchPills } from "./match-pills"
 import { Citations } from "./citations"
 import type { Listing } from "@/types"
 
-function relativeTime(iso?: string): string {
-  if (!iso) return "—"
-  const ms = Date.now() - new Date(iso).getTime()
-  if (ms < 0) return "just now"
-  const m = Math.floor(ms / 60000)
-  if (m < 1) return "just now"
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  const d = Math.floor(h / 24)
-  return `${d}d ago`
-}
-
 function scorePalette(score: number | null | undefined) {
   if (score == null) return { fg: Z.textFaint, bg: Z.bgSubtle, border: Z.border }
   if (score >= 70) return { fg: Z.green, bg: Z.greenSoft, border: "#BAE0C2" }
@@ -30,38 +17,32 @@ interface ListingCardProps {
   l: Listing
   idx: number
   city: string
-  isSessionNew: boolean
-  isFresh: boolean
   stale: boolean
+  saved: boolean
+  onToggleSave: () => void
   isHovered?: boolean
   onHover?: () => void
   onLeave?: () => void
 }
 
 export function ListingCard({
-  l, idx, city, isSessionNew, isFresh, stale, isHovered, onHover, onLeave,
+  l, idx, city, stale, saved, onToggleSave, isHovered, onHover, onLeave,
 }: ListingCardProps) {
   const searchFallback = `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
   const href = safeUrl(l.url, searchFallback)
   const scoreP = scorePalette(l.score)
-  const viaMonitor = l.details?.via_monitor === true
-  const newish = isSessionNew || isFresh
   return (
     <article
       data-listing-id={l.id}
       onMouseEnter={onHover}
       onMouseLeave={onLeave}
-      className={`group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 ${isSessionNew ? "animate-in fade-in slide-in-from-bottom-3 duration-500" : ""}`}
+      className="group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5"
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${newish || isHovered ? Z.blueBorder : Z.border}`,
-        boxShadow: isSessionNew
-          ? `0 0 0 4px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
-          : isFresh
-            ? `0 0 0 2px ${Z.blueSoft}, 0 1px 2px rgba(15,17,21,0.04)`
-            : isHovered
-              ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
-              : `0 1px 2px rgba(15,17,21,0.04)`,
+        border: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        boxShadow: isHovered
+          ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
+          : `0 1px 2px rgba(15,17,21,0.04)`,
         borderLeft: `3px solid ${scoreP.border}`,
       }}
     >
@@ -88,36 +69,9 @@ export function ListingCard({
           <span
             className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
             style={{ backgroundColor: scoreP.bg, color: scoreP.fg, border: `1px solid ${scoreP.border}` }}
-            title="Match score: recency + price fit + distance to reference point"
+            title="Match score: price fit + proximity to reference point"
           >
             {l.score}/100
-          </span>
-        )}
-        {isSessionNew && (
-          <span
-            className="text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-[0.08em] animate-pulse"
-            style={{ backgroundColor: Z.blue, color: "white" }}
-            title="Just arrived in this search"
-          >
-            new
-          </span>
-        )}
-        {!isSessionNew && isFresh && (
-          <span
-            className="text-[10px] uppercase font-bold px-2 py-0.5 rounded tracking-[0.08em]"
-            style={{ backgroundColor: Z.blueSoft, color: Z.blueDark, border: `1px solid ${Z.blueBorder}` }}
-            title={l.fetched_at ? `Discovered ${relativeTime(l.fetched_at)}` : "New since your last visit"}
-          >
-            new since last visit
-          </span>
-        )}
-        {viaMonitor && (
-          <span
-            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em] inline-flex items-center gap-1"
-            style={{ backgroundColor: "#FFF", color: Z.blueDark, border: `1px dashed ${Z.blueBorder}` }}
-            title="Discovered automatically by the always-on Parallel Monitor"
-          >
-            <span style={{ fontSize: "8px" }}>●</span> via monitor
           </span>
         )}
         {stale && (
@@ -129,6 +83,22 @@ export function ListingCard({
             stale?
           </span>
         )}
+        <button
+          type="button"
+          onClick={onToggleSave}
+          aria-pressed={saved}
+          title={saved ? "Remove from saved targets" : "Save this target"}
+          className="ml-auto text-[11px] font-bold px-2.5 py-1 rounded-lg transition-colors inline-flex items-center gap-1 shrink-0"
+          style={{
+            color: saved ? Z.blueDark : Z.textMid,
+            backgroundColor: saved ? Z.blueSoft : "transparent",
+            border: `1px solid ${saved ? Z.blueBorder : Z.border}`,
+            fontFamily: FONT_HEADING,
+          }}
+        >
+          <StarIcon filled={saved} />
+          {saved ? "Saved" : "Save"}
+        </button>
       </div>
 
       <div className="flex items-start justify-between gap-4 mb-3">
@@ -178,6 +148,18 @@ export function ListingCard({
       <MatchPills listing={l} />
       <Citations listing={l} />
     </article>
+  )
+}
+
+function StarIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg
+      width={12} height={12} viewBox="0 0 24 24"
+      fill={filled ? "currentColor" : "none"}
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+    </svg>
   )
 }
 

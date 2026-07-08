@@ -11,11 +11,9 @@ function avgPrice(listings: Listing[]): number | null {
 
 interface StatsBarProps {
   listings: Listing[]
-  newCount: number
-  monitoring: boolean
 }
 
-export function StatsBar({ listings, newCount, monitoring }: StatsBarProps) {
+export function StatsBar({ listings }: StatsBarProps) {
   const avg = avgPrice(listings)
   const min = listings.reduce((m, l) => (l.price && (m == null || l.price < m) ? l.price : m), null as number | null)
   const high = listings.filter((l) => (l.score ?? 0) >= 70).length
@@ -28,9 +26,6 @@ export function StatsBar({ listings, newCount, monitoring }: StatsBarProps) {
       {high > 0 && <Stat label="Strong fit" value={`${high}`} color={Z.green} />}
       {avg != null && <Stat label="Avg rent" value={`$${avg.toLocaleString()}`} />}
       {min != null && <Stat label="Lowest" value={`$${min.toLocaleString()}`} />}
-      {monitoring && newCount > 0 && (
-        <Stat label="New this cycle" value={`+${newCount}`} accent />
-      )}
     </div>
   )
 }

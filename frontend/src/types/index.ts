@@ -8,12 +8,8 @@ export type ListingDetails = {
   neighborhood_name?: string | null
   parking_type?: string | null
   laundry_type?: string | null
-  via_monitor?: boolean | null
-  monitor_event_date?: string | null
-  monitor_summary?: string | null
   is_currently_active?: boolean | null
   days_on_market?: number | null
-  search_city?: string | null
 }
 
 export type MatchCondition = {
@@ -84,18 +80,6 @@ export type TaskEvent =
   | { event: "listing"; listing: Listing }
   | { event: "error"; message: string }
 
-export type MonitorStatus = {
-  active: boolean
-  monitor_id?: string | null
-  query?: string
-  frequency?: string
-  processor?: string
-  status?: string
-  last_run_at?: string
-  created_at?: string
-  events_last_24h?: number
-}
-
 export type StepStatus = "pending" | "active" | "done" | "error"
 
 export type ProcessStep = {
@@ -107,4 +91,4 @@ export type ProcessStep = {
   progress?: { matched: number; total: number }
 }
 
-export type ViewMode = "list" | "map"
+export type ViewMode = "list" | "map" | "saved"

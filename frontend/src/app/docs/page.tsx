@@ -155,21 +155,17 @@ type DiagBox = {
 }
 
 function ArchDiagram() {
-  const W = 880
+  const W = 520
   const H = 940
-  const COL_L = 80
-  const COL_R = 540
-  const COL_C_LEFT = COL_L + 110
-  const COL_C_RIGHT = COL_R + 110
-  const COL_C = W / 2
+  const COL = 150
+  const CX = COL + 110
 
   const boxes: DiagBox[] = [
-    { x: COL_L,  y: 24,  w: 220, h: 36, title: "User search",       accent: "blue", emphasis: true },
-    { x: COL_R,  y: 24,  w: 220, h: 36, title: "Background watch",  accent: "blue", emphasis: true },
-    { x: COL_L,  y: 90,  w: 220, h: 50, title: "POST /api/tasks",   sub: "natural-language query" },
-    { x: COL_L,  y: 170, w: 220, h: 60, title: "FindAll create",     sub: "generator: pro" },
-    { x: COL_L,  y: 260, w: 220, h: 70, title: "Match conditions",   sub: "is_rental_listing · fits_budget\n+ 18 enrichments" },
-    { x: COL_L,  y: 360, w: 220, h: 168, title: "_candidate_to_listing", bullets: [
+    { x: COL, y: 24,  w: 220, h: 36, title: "User search",       accent: "blue", emphasis: true },
+    { x: COL, y: 88,  w: 220, h: 50, title: "POST /api/tasks",   sub: "natural-language query" },
+    { x: COL, y: 166, w: 220, h: 60, title: "FindAll create",    sub: "generator: pro" },
+    { x: COL, y: 254, w: 220, h: 70, title: "Match conditions",  sub: "is_rental_listing · fits_budget\n+ 18 enrichments" },
+    { x: COL, y: 352, w: 220, h: 168, title: "_candidate_to_listing", bullets: [
       "block-domain guard",
       "junk-page filter",
       "plausibility floors",
@@ -177,32 +173,24 @@ function ArchDiagram() {
       "bedroom min post-filter",
       "enrichments → details",
     ]},
-    { x: COL_L,  y: 558, w: 220, h: 60, title: "Task API (spam)",    sub: "processor: pro · 5 fact booleans" },
-    { x: COL_R,  y: 90,  w: 220, h: 50, title: "Parallel Monitor",  sub: "1h tick · processor: base" },
-    { x: COL_R,  y: 170, w: 220, h: 60, title: "GET /events",        sub: "every 60s, local poll loop" },
-    { x: COL_R,  y: 260, w: 220, h: 70, title: "_event_to_listing",  sub: "block-domain · junk-page\nbounds checks" },
-    { x: 330,    y: 678, w: 220, h: 60, title: "SQLite catalog",     accent: "amber", emphasis: true },
-    { x: 330,    y: 768, w: 220, h: 50, title: "GET /api/listings",  sub: "client poll every 30s" },
-    { x: 330,    y: 848, w: 220, h: 50, title: "/demo UI",           accent: "blue", emphasis: true },
+    { x: COL, y: 548, w: 220, h: 60, title: "Task API (spam)",   sub: "processor: pro · 5 fact booleans" },
+    { x: COL, y: 636, w: 220, h: 60, title: "Geocode + score",   sub: "Nominatim ~1/sec · in-session" },
+    { x: COL, y: 724, w: 220, h: 50, title: "SSE stream",        sub: "GET /api/tasks/{id}/stream" },
+    { x: COL, y: 802, w: 220, h: 36, title: "/demo UI (session)", accent: "blue", emphasis: true },
+    { x: COL, y: 866, w: 220, h: 50, title: "Save to browser",   accent: "amber", emphasis: true, sub: "localStorage · client only" },
   ]
 
   type Arrow = { x1: number; y1: number; x2: number; y2: number; dashed?: boolean }
   const arrows: Arrow[] = [
-    { x1: COL_C_LEFT, y1: 60,  x2: COL_C_LEFT, y2: 88 },
-    { x1: COL_C_LEFT, y1: 140, x2: COL_C_LEFT, y2: 168 },
-    { x1: COL_C_LEFT, y1: 230, x2: COL_C_LEFT, y2: 258 },
-    { x1: COL_C_LEFT, y1: 330, x2: COL_C_LEFT, y2: 358 },
-    { x1: COL_C_LEFT, y1: 528, x2: COL_C_LEFT, y2: 556 },
-    { x1: COL_C_RIGHT, y1: 60,  x2: COL_C_RIGHT, y2: 88 },
-    { x1: COL_C_RIGHT, y1: 140, x2: COL_C_RIGHT, y2: 168 },
-    { x1: COL_C_RIGHT, y1: 230, x2: COL_C_RIGHT, y2: 258 },
-    { x1: COL_C_LEFT,  y1: 618, x2: COL_C_LEFT,  y2: 660 },
-    { x1: COL_C_RIGHT, y1: 330, x2: COL_C_RIGHT, y2: 660 },
-    { x1: COL_C_LEFT,  y1: 660, x2: COL_C,        y2: 660 },
-    { x1: COL_C_RIGHT, y1: 660, x2: COL_C,        y2: 660 },
-    { x1: COL_C,       y1: 660, x2: COL_C,        y2: 676 },
-    { x1: COL_C, y1: 738, x2: COL_C, y2: 766 },
-    { x1: COL_C, y1: 818, x2: COL_C, y2: 846 },
+    { x1: CX, y1: 60,  x2: CX, y2: 86 },
+    { x1: CX, y1: 138, x2: CX, y2: 164 },
+    { x1: CX, y1: 226, x2: CX, y2: 252 },
+    { x1: CX, y1: 324, x2: CX, y2: 350 },
+    { x1: CX, y1: 520, x2: CX, y2: 546 },
+    { x1: CX, y1: 608, x2: CX, y2: 634 },
+    { x1: CX, y1: 696, x2: CX, y2: 722 },
+    { x1: CX, y1: 774, x2: CX, y2: 800 },
+    { x1: CX, y1: 838, x2: CX, y2: 864, dashed: true },
   ]
 
   const fillFor = (b: DiagBox) => {
@@ -244,10 +232,8 @@ function ArchDiagram() {
             <feDropShadow dx="0" dy="1" stdDeviation="1.5" floodColor="#0E1117" floodOpacity="0.06" />
           </filter>
         </defs>
-        <rect x={COL_L - 16} y={12} width={252} height={620} rx={16} fill={Z.bgPage} opacity={0.6} />
-        <rect x={COL_R - 16} y={12} width={252} height={325} rx={16} fill={Z.bgPage} opacity={0.6} />
-        <text x={COL_C_LEFT} y={6} textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">USER-DRIVEN</text>
-        <text x={COL_C_RIGHT} y={6} textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">ALWAYS-ON</text>
+        <rect x={COL - 16} y={12} width={252} height={912} rx={16} fill={Z.bgPage} opacity={0.6} />
+        <text x={CX} y={6} textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">SEARCH → STREAM (STATELESS)</text>
         {arrows.map((a, i) => {
           const isHorizontal = Math.abs(a.y1 - a.y2) < 1
           const mark = isHorizontal ? undefined : "url(#arrowhead)"
@@ -294,7 +280,6 @@ const ARCH_NAV: { id: string; label: string }[] = [
   { id: "discovery", label: "Discovery" },
   { id: "enrichment", label: "Enrichment" },
   { id: "trust", label: "Trust scoring" },
-  { id: "monitor", label: "Always-on watch" },
   { id: "scoring", label: "Result scoring" },
   { id: "quality", label: "Quality controls" },
   { id: "config", label: "Configuration" },
@@ -360,15 +345,11 @@ function ArchitectureTab() {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px", gap: 40 }}>
       <article>
         <H2 id="overview">Overview</H2>
-        <P>Two flows feed listings into the catalog:</P>
-        <ul style={{ color: Z.textSoft, lineHeight: 1.8, fontSize: "0.95rem", paddingLeft: 24 }}>
-          <li><strong style={{ color: Z.text }}>User-driven discovery.</strong> User types natural language &#x2192; backend translates into a Parallel FindAll run with explicit match conditions and 18 enrichments &#x2192; matched candidates stream to the UI as they&apos;re verified.</li>
-          <li><strong style={{ color: Z.text }}>Always-on watch.</strong> A Parallel Monitor runs hourly with a saved query &#x2192; events POSTed to the local poll loop &#x2192; new findings persisted with <Code>details.via_monitor = true</Code>.</li>
-        </ul>
-        <P>Both flows write to the same SQLite catalog. The frontend hydrates from <Code>/api/listings</Code> on mount and polls every 30s, so Monitor-discovered listings show up without a page reload.</P>
+        <P>One flow, and it runs entirely on demand. The user types natural language &#x2192; the backend builds a Parallel FindAll run with explicit match conditions and 18 enrichments &#x2192; matched candidates are parsed, spam-scored, geocoded, and scored, then streamed to the UI over SSE as they&apos;re verified.</P>
+        <P>The backend is <strong style={{ color: Z.text }}>stateless</strong>: no database, no catalog, nothing persisted server-side. Each search is independent and its results live only in the browser session. The one piece of persistence is client-side &#x2014; the user can <strong style={{ color: Z.text }}>Save</strong> listings to a shortlist kept in their own browser via <Code>localStorage</Code> (key <Code>apartment-finder-saved-targets</Code>), never sent to any server.</P>
 
         <H2 id="pipeline">Pipeline</H2>
-        <P>Two flows feed the SQLite catalog. Both pass through their own guard chain before insert; the UI hydrates from the merged set.</P>
+        <P>A single streaming pipeline. Each candidate passes through a guard chain, gets enriched and scored in-session, and is pushed to the client the moment it&apos;s verified &#x2014; results render progressively rather than after a batch write.</P>
         <ArchDiagram />
 
         <H2 id="discovery">Discovery</H2>
@@ -412,11 +393,8 @@ fits_budget
           </div>
         </Card>
 
-        <H2 id="monitor">Always-on watch</H2>
-        <P>A single Parallel Monitor runs at <Code>1h</Code> frequency with the <Code>base</Code> processor. The local poll loop hits <Code>GET /v1/monitors/{"{id}"}/events</Code> every 60s for new events.</P>
-
         <H2 id="scoring">Result scoring</H2>
-        <P>Every listing gets a 0&#x2013;100 score from three equally-weighted factors: recency, price fit, and proximity to the reference point.</P>
+        <P>Every listing gets a 0&#x2013;100 score from three equally-weighted factors: recency, price fit, and proximity to the reference point. Because results are fetched fresh each search, recency is always at its maximum &#x2014; ranking is driven by price fit and proximity.</P>
         <Card>
           <H3>Bands</H3>
           <Block>{`Recency (max 33)        Price fit (max 33)         Proximity (max 33)
@@ -429,7 +407,7 @@ fits_budget
         <H2 id="quality">Quality controls</H2>
         <Card accent={Z.red}>
           <H3>Blocked domains</H3>
-          <P>Refused at three layers: FindAll match condition, Monitor query string, and an insert-time URL guard.</P>
+          <P>Refused at two layers: the FindAll match condition, and a URL guard during candidate parsing.</P>
           <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 8 }}>
             <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>zillow.com</Pill>
             <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>apartments.com</Pill>
@@ -444,7 +422,7 @@ fits_budget
 
         <Card accent={Z.amber}>
           <H3>Stale-results filter</H3>
-          <P>Aggregator sites: &gt;14 days = stale. Direct sources: &gt;45 days = stale. API-derived <Code>is_currently_active</Code> overrides when present.</P>
+          <P>A frontend guard: even though results are fetched fresh each search, a listing the API reports as inactive (<Code>is_currently_active = false</Code>) or past its freshness window &#x2014; aggregator sites &gt;14 days, direct sources &gt;45 days &#x2014; is flagged as likely-stale and hidden by default.</P>
         </Card>
 
         <H2 id="config">Configuration</H2>
