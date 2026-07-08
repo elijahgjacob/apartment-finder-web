@@ -10,7 +10,12 @@ from ..services.search_service import create_task, get_task, run_task, stream_ta
 _current_user_task: asyncio.Task | None = None
 
 
-async def create_search_task(query: str, budget: int) -> JSONResponse:
+async def create_search_task(
+    query: str,
+    budget: int,
+    city: str | None = None,
+    requirements: str | None = None,
+) -> JSONResponse:
     """Cancel-and-replace: typing a new query cancels the previous user search.
     Independent of the background loop — both can run concurrently."""
     global _current_user_task
@@ -23,7 +28,7 @@ async def create_search_task(query: str, budget: int) -> JSONResponse:
         except (asyncio.CancelledError, asyncio.TimeoutError, Exception):
             pass
 
-    task = create_task(query=query, budget=budget)
+    task = create_task(query=query, budget=budget, city=city, requirements=requirements)
     _current_user_task = asyncio.create_task(run_task(task))
     return JSONResponse({"task_id": task.id, "status": task.status.value})
 

@@ -17,6 +17,10 @@ def get_db() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    # Wait (up to 5s) instead of raising "database is locked" if another
+    # connection is mid-write. The app shares one connection (sqlite3
+    # threadsafety=3 serializes access), but this guards external openers.
+    conn.execute("PRAGMA busy_timeout=5000")
 
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS listings (

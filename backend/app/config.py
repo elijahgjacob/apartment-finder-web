@@ -13,7 +13,7 @@ MAP_CENTER_LAT = float(os.environ.get("MAP_CENTER_LAT", str(REFERENCE_POINT_LAT)
 MAP_CENTER_LNG = float(os.environ.get("MAP_CENTER_LNG", str(REFERENCE_POINT_LNG)))
 MAP_ZOOM = int(os.environ.get("MAP_ZOOM", "13"))
 
-DEFAULT_BUDGET = int(os.environ.get("SEARCH_BUDGET", "7500"))
+DEFAULT_BUDGET = int(os.environ.get("SEARCH_BUDGET", "5000"))
 DEFAULT_QUERY = os.environ.get("SEARCH_QUERY", f"apartments for rent in {CITY_SHORT}")
 SEARCH_INTERVAL = int(os.environ.get("SEARCH_INTERVAL_SECONDS", "300"))
 SEARCH_BEDROOMS = os.environ.get("SEARCH_BEDROOMS", "")
@@ -24,8 +24,7 @@ LISTING_SITES = os.environ.get(
     "LISTING_SITES",
     "trulia.com,craigslist.org,hotpads.com,rent.com,"
     "redfin.com,realtor.com,padmapper.com,rentcafe.com,zumper.com,movoto.com,"
-    "rentberry.com,showcase.com,compass.com,rentsfnow.com,"
-    "homes.mercurynews.com"
+    "rentberry.com,showcase.com,compass.com"
 )
 
 BLOCKED_DOMAINS = tuple(
@@ -41,7 +40,7 @@ GEO_LAT_MAX = float(os.environ.get("GEO_LAT_MAX", "38.0"))
 GEO_LNG_MIN = float(os.environ.get("GEO_LNG_MIN", "-122.6"))
 GEO_LNG_MAX = float(os.environ.get("GEO_LNG_MAX", "-122.3"))
 
-APP_TITLE = os.environ.get("APP_TITLE", f"{CITY_SHORT} Apartment Finder")
+APP_TITLE = os.environ.get("APP_TITLE", "Apartment Finder")
 
 BRAND_NAME = os.environ.get("BRAND_NAME", "Parallel")
 BRAND_TAGLINE = os.environ.get("BRAND_TAGLINE", "AI Apartment Search")
@@ -53,10 +52,10 @@ BRAND_DISCLAIMER = os.environ.get(
 
 SUGGESTIONS = [s.strip() for s in os.environ.get(
     "SEARCH_SUGGESTIONS",
-    f"{SEARCH_BEDROOMS or '3'}-bedroom near transit, available within a month, under ${DEFAULT_BUDGET}|"
-    f"Pet-friendly studio in {CITY_SHORT}, available before December, under $3000|"
-    f"3BR with in-unit laundry and parking, walk to {REFERENCE_POINT_NAME}, under $7000|"
-    "Furnished 1BR for a 6-month lease, dog-friendly, under $4000",
+    "3-bedroom near transit, available within a month|"
+    "Pet-friendly studio, available soon, under $2500|"
+    "2BR with in-unit laundry and parking|"
+    "Furnished 1BR, dog-friendly, short-term lease",
 ).split("|") if s.strip()]
 
 def _parse_rent_floors(raw: str) -> dict[int, int]:
@@ -72,7 +71,7 @@ def _parse_rent_floors(raw: str) -> dict[int, int]:
     return out
 
 RENT_FLOORS = _parse_rent_floors(os.environ.get(
-    "RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000",
+    "RENT_FLOORS", "0:800,1:1000,2:1200,3:1500,4:2000,5:2500",
 ))
 
 AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(

@@ -1,8 +1,16 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { api } from "@/lib/api"
 import type { Listing } from "@/types"
+
+function parseEventData<T>(e: Event): T | null {
+  try {
+    return JSON.parse((e as MessageEvent).data) as T
+  } catch {
+    return null
+  }
+}
 
 export function useSearch() {
   const [query, setQuery] = useState("")
@@ -14,7 +22,11 @@ export function useSearch() {
   const [done, setDone] = useState(false)
   const evtRef = useRef<EventSource | null>(null)
 
-  const startSearch = useCallback(async (q: string, budget: number, opts: { keepListings?: boolean } = {}) => {
+  const startSearch = useCallback(async (
+    q: string,
+    budget: number,
+    opts: { keepListings?: boolean; city?: string; requirements?: string } = {},
+  ) => {
     if (!q.trim()) return
     evtRef.current?.close()
     setReasoning("")
@@ -25,10 +37,13 @@ export function useSearch() {
     setStreaming(true)
 
     try {
+      const body: Record<string, unknown> = { query: q, budget }
+      if (opts.city) body.city = opts.city
+      if (opts.requirements) body.requirements = opts.requirements
       const res = await fetch(api("/api/tasks"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q, budget }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
         const j = await res.json().catch(() => ({}))
@@ -41,32 +56,41 @@ export function useSearch() {
       evtRef.current = evt
 
       evt.addEventListener("reasoning", (e) => {
-        setReasoning((p) => p + JSON.parse((e as MessageEvent).data).text)
+        const d = parseEventData<{ text: string }>(e)
+        if (d?.text) setReasoning((p) => p + d.text)
       })
       evt.addEventListener("listing", (e) => {
-        const incoming: Listing = JSON.parse((e as MessageEvent).data).listing
+        const d = parseEventData<{ listing: Listing }>(e)
+        const incoming = d?.listing
+        if (!incoming?.id) return
         setListings((p) => p.find((x) => x.id === incoming.id) ? p : [...p, incoming])
         if (opts.keepListings) setNewIds((p) => new Set(p).add(incoming.id))
       })
       evt.addEventListener("status", (e) => {
-        if (JSON.parse((e as MessageEvent).data).status === "done") {
+        const d = parseEventData<{ status: string }>(e)
+        if (d?.status === "done") {
           evt.close(); setStreaming(false); setDone(true)
         }
       })
+      let gotNamedError = false
       evt.addEventListener("error", (e) => {
-        let msg = "Search failed"
-        try { msg = JSON.parse((e as MessageEvent).data).message } catch { /* default */ }
-        evt.close(); setStreaming(false); setError(msg)
+        const d = parseEventData<{ message: string }>(e)
+        gotNamedError = true
+        evt.close(); setStreaming(false); setError(d?.message ?? "Search failed")
       })
       evt.onerror = () => {
         evt.close(); setStreaming(false)
-        setError("Connection lost")
+        if (!gotNamedError) setError("Connection lost")
       }
     } catch (err) {
       setStreaming(false)
       setError(err instanceof Error ? err.message : "Search failed")
     }
   }, [])
+
+  // Close any live SSE stream when the hook unmounts so the connection and
+  // its listeners don't leak (startSearch only closes the *previous* stream).
+  useEffect(() => () => evtRef.current?.close(), [])
 
   const mergeListings = useCallback((data: Listing[]) => {
     setListings((prev) => {

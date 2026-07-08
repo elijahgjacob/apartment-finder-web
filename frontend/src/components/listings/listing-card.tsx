@@ -1,6 +1,7 @@
 "use client"
 
 import { Z, FONT_HEADING } from "@/lib/palette"
+import { safeUrl } from "@/lib/utils"
 import { MatchPills } from "./match-pills"
 import { Citations } from "./citations"
 import type { Listing } from "@/types"
@@ -40,7 +41,8 @@ interface ListingCardProps {
 export function ListingCard({
   l, idx, city, isSessionNew, isFresh, stale, isHovered, onHover, onLeave,
 }: ListingCardProps) {
-  const href = l.url ?? `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
+  const searchFallback = `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
+  const href = safeUrl(l.url, searchFallback)
   const scoreP = scorePalette(l.score)
   const viaMonitor = l.details?.via_monitor === true
   const newish = isSessionNew || isFresh

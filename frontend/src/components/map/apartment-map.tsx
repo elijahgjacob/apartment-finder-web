@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react"
 import L from "leaflet"
+import { escapeHtml } from "@/lib/utils"
 import type { AppConfig, Listing } from "@/types"
 
 const Z_BLUE = "#fb631b"
@@ -86,9 +87,9 @@ export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, heigh
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
   const layerRef = useRef<L.LayerGroup | null>(null)
 
-  const centerLat = config?.mapCenter.lat ?? 37.7749
-  const centerLng = config?.mapCenter.lng ?? -122.4194
-  const zoom = config?.mapZoom ?? 13
+  const centerLat = config?.mapCenter.lat ?? 39.8283
+  const centerLng = config?.mapCenter.lng ?? -98.5795
+  const zoom = config?.mapZoom ?? 4
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
@@ -133,13 +134,15 @@ export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, heigh
       bounds.push([l.lat, l.lng])
       const marker = L.marker([l.lat, l.lng], { icon: makePriceTag(l, false) })
       marker.addTo(layerRef.current!)
-      const name = l.address || l.title || "—"
+      // Listing text is scraped/LLM-extracted (untrusted) and Leaflet injects
+      // this string as raw HTML — escape every interpolated field.
+      const name = escapeHtml(l.address || l.title || "—")
       const price = l.price ? `$${l.price.toLocaleString()}/mo` : "—"
       const beds = l.bedrooms != null ? `${l.bedrooms}bd` : ""
       marker.bindTooltip(
         `<div style="font-family:'Geist Variable',system-ui,sans-serif;font-size:12px;line-height:1.4;color:#0E1117;">
           <strong style="display:block;margin-bottom:2px;">${name}</strong>
-          <span style="color:#5C6370;">${[beds, price].filter(Boolean).join(" · ")}</span>
+          <span style="color:#5C6370;">${escapeHtml([beds, price].filter(Boolean).join(" · "))}</span>
         </div>`,
         { direction: "top", offset: [0, -8], className: "zillow-map-tooltip" },
       )

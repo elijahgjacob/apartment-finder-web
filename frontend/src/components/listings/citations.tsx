@@ -1,6 +1,7 @@
 "use client"
 
 import { Z } from "@/lib/palette"
+import { safeUrl } from "@/lib/utils"
 import type { Listing } from "@/types"
 
 export function Citations({ listing }: { listing: Listing }) {
@@ -16,7 +17,7 @@ export function Citations({ listing }: { listing: Listing }) {
         return (
           <a
             key={c.url}
-            href={c.url}
+            href={safeUrl(c.url)}
             target="_blank"
             rel="noopener noreferrer"
             className="text-[11px] hover:underline truncate max-w-[260px] inline-flex items-center gap-1"

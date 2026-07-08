@@ -13,6 +13,7 @@ export type ListingDetails = {
   monitor_summary?: string | null
   is_currently_active?: boolean | null
   days_on_market?: number | null
+  search_city?: string | null
 }
 
 export type MatchCondition = {

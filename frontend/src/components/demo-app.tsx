@@ -142,7 +142,8 @@ export default function DemoApp() {
 }
 
 function DemoAppInner({ config }: { config: AppConfig }) {
-  const city = config.cityShort
+  const [city, setCity] = useState(config.cityShort)
+  const [requirements, setRequirements] = useState("")
   const { lastSeenAt, markAllSeen } = useLocalStorage("parallel-demo-lastSeenAt")
 
   const [view, setView] = useState<ViewMode>("list")
@@ -164,7 +165,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const isStale = useMemo(() => makeIsStale(config.staleness), [config.staleness])
 
-  useListings(done, mergeListings)
+  useListings(done, mergeListings, city)
 
   const {
     monitor, monitorBusy,
@@ -180,7 +181,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    startSearch(query, effectiveBudget)
+    startSearch(query, effectiveBudget, { city, requirements: requirements || undefined })
     if (watchOnSubmit) {
       void watchThisQuery().then((err) => {
         if (err) setError(err)
@@ -274,6 +275,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           <SearchBar
             query={query}
             onQueryChange={setQuery}
+            city={city}
+            onCityChange={setCity}
+            requirements={requirements}
+            onRequirementsChange={setRequirements}
             onSubmit={onSubmit}
             streaming={streaming}
             monitorBusy={monitorBusy}
@@ -283,7 +288,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
           <SearchSuggestions
             suggestions={config.suggestions}
-            onSelect={(s) => { setQuery(s); startSearch(s, effectiveBudget) }}
+            onSelect={(s) => { setQuery(s); startSearch(s, effectiveBudget, { city, requirements: requirements || undefined }) }}
             parsedBeds={parsedBeds}
             parsedBudget={parsedBudget}
             effectiveBudget={effectiveBudget}

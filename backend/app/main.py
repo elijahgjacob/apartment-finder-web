@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -35,7 +36,16 @@ def _backfill_geocodes():
         addr = row["address"] or row["title"] or ""
         if not addr:
             continue
-        coords = geocode_address(addr)
+        # Street addresses are stored without a city (the enrichment strips
+        # it), so resolve against the city the listing was found in. Falls
+        # back to the app default inside geocode_address when unset.
+        city = None
+        try:
+            details = json.loads(row["details"]) if row["details"] else {}
+            city = details.get("search_city")
+        except (TypeError, ValueError, KeyError):
+            pass
+        coords = geocode_address(addr, city) if city else geocode_address(addr)
         if coords:
             update_listing_geocode(row["id"], coords[0], coords[1])
             logger.debug("Geocoded %s → %.4f, %.4f", addr, coords[0], coords[1])
@@ -63,9 +73,11 @@ async def _monitor_poll_loop():
                         await asyncio.sleep(MONITOR_POLL_SECONDS)
                         continue
                     async with _bg_lock:
-                        new_listings = await monitor_poll_once(client, monitor_id)
-                        if new_listings:
-                            await asyncio.to_thread(_backfill_geocodes)
+                        await monitor_poll_once(client, monitor_id)
+                        # Geocode any ungeocoded listings regardless of source
+                        # (user searches also produce them, not just monitor
+                        # events). Cheap no-op when nothing needs geocoding.
+                        await asyncio.to_thread(_backfill_geocodes)
                     await asyncio.sleep(MONITOR_POLL_SECONDS)
         except asyncio.CancelledError:
             raise

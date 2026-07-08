@@ -8,6 +8,7 @@ from typing import Any
 from ..config import (
     REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
     DEFAULT_BUDGET, SPAM_HIDE_THRESHOLD,
+    RENT_FLOORS,
 )
 from ..models.listing import Listing
 from ..repositories.listing_repository import get_active_listings
@@ -83,17 +84,10 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-# Same numbers used as price-plausibility floor in search_service — kept
-# here too so listing_service doesn't need to import from search_service.
-_RENT_FLOORS_SF: dict[int, int] = {
-    0: 1900, 1: 2700, 2: 3600, 3: 5200, 4: 6500, 5: 8000,
-}
-
-
 def _typical_rent(beds: int | None) -> int | None:
     if beds is None:
         return None
-    return _RENT_FLOORS_SF.get(beds) or _RENT_FLOORS_SF.get(min(beds, 5))
+    return RENT_FLOORS.get(beds) or RENT_FLOORS.get(min(beds, 5))
 
 
 def compute_score(listing: Listing, budget: int) -> int:

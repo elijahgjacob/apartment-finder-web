@@ -639,6 +639,9 @@ function LiveApiCallsTab() {
   }, [])
 
   useEffect(() => {
+    // fetchCalls only setState()s after an await, so this is not a synchronous
+    // effect-body setState despite what the lint rule infers.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchCalls()
     if (paused) return
     const t = setInterval(fetchCalls, 5000)

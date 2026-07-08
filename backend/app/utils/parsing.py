@@ -51,7 +51,10 @@ def _address_from_name(name: str) -> str | None:
 def _normalize_address(addr: str) -> str:
     s = addr.lower().strip()
     s = re.sub(r"\s*(apt|unit|suite|ste|#)\s*[\w-]+", "", s, flags=re.IGNORECASE)
-    s = re.sub(r",?\s*(san francisco|sf|ca|california|\d{5}).*$", "", s, flags=re.IGNORECASE)
+    s = re.sub(r",?\s*[A-Za-z\s]+,\s*[A-Z]{2}\s*\d{5}(-\d{4})?$", "", s)
+    s = re.sub(r",?\s*[A-Z]{2}\s+\d{5}(-\d{4})?$", "", s)
+    s = re.sub(r",?\s*\d{5}(-\d{4})?$", "", s)
+    s = re.sub(r",?\s*[A-Z]{2}$", "", s)
     return s.strip().rstrip(",").strip()
 
 

@@ -18,6 +18,8 @@ class Task:
     id: str
     query: str
     budget: int
+    city: str | None = None
+    requirements: str | None = None
     min_beds: int | None = None
     status: TaskStatus = TaskStatus.PENDING
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
