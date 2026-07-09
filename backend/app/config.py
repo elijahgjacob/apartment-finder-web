@@ -74,6 +74,11 @@ AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
 STALE_AGGREGATOR_DAYS = int(os.environ.get("STALE_AGGREGATOR_DAYS", "14"))
 STALE_DIRECT_DAYS = int(os.environ.get("STALE_DIRECT_DAYS", "45"))
 
-TASK_SPAM_PROCESSOR = os.environ.get("TASK_SPAM_PROCESSOR", "pro")
-
-FINDALL_GENERATOR = os.environ.get("FINDALL_GENERATOR", "pro")
+# "base" is dramatically faster than "pro" (~1 min vs 5+ min) and plenty
+# accurate for an interactive search. Override with FINDALL_GENERATOR=pro
+# for exhaustive runs.
+FINDALL_GENERATOR = os.environ.get("FINDALL_GENERATOR", "base")
+FINDALL_MATCH_LIMIT = int(os.environ.get("FINDALL_MATCH_LIMIT", "8"))
+# Processor for the structured-enrichment pass that fills in price, beds,
+# address, etc. after discovery.
+FINDALL_ENRICH_PROCESSOR = os.environ.get("FINDALL_ENRICH_PROCESSOR", "base")

@@ -12,6 +12,8 @@ function parseEventData<T>(e: Event): T | null {
   }
 }
 
+export type SearchPhase = { key: "discover" | "extract" | "finalize" | "done"; detail: string }
+
 export function useSearch() {
   const [query, setQuery] = useState("")
   const [reasoning, setReasoning] = useState("")
@@ -19,6 +21,8 @@ export function useSearch() {
   const [listings, setListings] = useState<Listing[]>([])
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  const [phase, setPhase] = useState<SearchPhase | null>(null)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
   const evtRef = useRef<EventSource | null>(null)
 
   const startSearch = useCallback(async (
@@ -33,6 +37,8 @@ export function useSearch() {
     setError(null)
     setDone(false)
     setStreaming(true)
+    setPhase({ key: "discover", detail: "Starting…" })
+    setStartedAt(Date.now())
 
     try {
       const body: Record<string, unknown> = { query: q, budget }
@@ -63,6 +69,10 @@ export function useSearch() {
         if (!incoming?.id) return
         setListings((p) => (p.find((x) => x.id === incoming.id) ? p : [...p, incoming]))
       })
+      evt.addEventListener("phase", (e) => {
+        const d = parseEventData<SearchPhase>(e)
+        if (d?.key) setPhase(d)
+      })
       evt.addEventListener("status", (e) => {
         const d = parseEventData<{ status: string }>(e)
         if (d?.status === "done") {
@@ -91,7 +101,7 @@ export function useSearch() {
 
   return {
     query, setQuery,
-    reasoning, streaming, listings, error, done,
+    reasoning, streaming, listings, error, done, phase, startedAt,
     startSearch, setError,
   } as const
 }

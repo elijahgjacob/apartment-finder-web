@@ -8,6 +8,7 @@ import { useSavedTargets } from "@/hooks/use-saved-targets"
 import { Header } from "@/components/layout/header"
 import { Footer } from "@/components/layout/footer"
 import { SearchBar } from "@/components/search/search-bar"
+import { SearchStatus } from "@/components/search/search-status"
 import { SearchSuggestions } from "@/components/search/search-suggestions"
 import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
@@ -148,7 +149,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const {
     query, setQuery,
-    reasoning, streaming, listings, error, done,
+    reasoning, streaming, listings, error, done, phase, startedAt,
     startSearch,
   } = useSearch()
 
@@ -294,6 +295,9 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
         {hasActivity ? (
           <>
+            {!showingSaved && (
+              <SearchStatus phase={phase} streaming={streaming} startedAt={startedAt} />
+            )}
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
                 <StatsBar listings={visibleListings} />
