@@ -7,9 +7,9 @@ import type { Listing } from "@/types"
 interface ListingGridProps {
   listings: Listing[]
   city: string
-  newIds: Set<string>
-  isNewSinceLastVisit: (l: Listing) => boolean
   isStale: (l: Listing) => boolean
+  isSaved: (l: Listing) => boolean
+  onToggleSave: (l: Listing) => void
   hoveredId: string | null
   onHover: (id: string) => void
   onLeave: () => void
@@ -23,7 +23,7 @@ interface ListingGridProps {
 }
 
 export function ListingGrid({
-  listings, city, newIds, isNewSinceLastVisit, isStale,
+  listings, city, isStale, isSaved, onToggleSave,
   hoveredId, onHover, onLeave, streaming,
   hiddenLowScoreCount, hiddenStaleCount,
   showAllScores, showStale, onToggleScores, onToggleStale,
@@ -47,9 +47,9 @@ export function ListingGrid({
       {listings.map((l, i) => (
         <ListingCard
           key={l.id} l={l} idx={i} city={city}
-          isSessionNew={newIds.has(l.id)}
-          isFresh={!newIds.has(l.id) && isNewSinceLastVisit(l)}
           stale={isStale(l)}
+          saved={isSaved(l)}
+          onToggleSave={() => onToggleSave(l)}
           isHovered={hoveredId === l.id}
           onHover={() => onHover(l.id)}
           onLeave={onLeave}

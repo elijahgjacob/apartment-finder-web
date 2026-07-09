@@ -17,7 +17,6 @@ export function useSearch() {
   const [reasoning, setReasoning] = useState("")
   const [streaming, setStreaming] = useState(false)
   const [listings, setListings] = useState<Listing[]>([])
-  const [newIds, setNewIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
   const evtRef = useRef<EventSource | null>(null)
@@ -25,13 +24,12 @@ export function useSearch() {
   const startSearch = useCallback(async (
     q: string,
     budget: number,
-    opts: { keepListings?: boolean; city?: string; requirements?: string } = {},
+    opts: { city?: string; requirements?: string } = {},
   ) => {
     if (!q.trim()) return
     evtRef.current?.close()
     setReasoning("")
-    if (!opts.keepListings) setListings([])
-    setNewIds(new Set())
+    setListings([])
     setError(null)
     setDone(false)
     setStreaming(true)
@@ -63,8 +61,7 @@ export function useSearch() {
         const d = parseEventData<{ listing: Listing }>(e)
         const incoming = d?.listing
         if (!incoming?.id) return
-        setListings((p) => p.find((x) => x.id === incoming.id) ? p : [...p, incoming])
-        if (opts.keepListings) setNewIds((p) => new Set(p).add(incoming.id))
+        setListings((p) => (p.find((x) => x.id === incoming.id) ? p : [...p, incoming]))
       })
       evt.addEventListener("status", (e) => {
         const d = parseEventData<{ status: string }>(e)
@@ -89,22 +86,12 @@ export function useSearch() {
   }, [])
 
   // Close any live SSE stream when the hook unmounts so the connection and
-  // its listeners don't leak (startSearch only closes the *previous* stream).
+  // its listeners don't leak.
   useEffect(() => () => evtRef.current?.close(), [])
-
-  const mergeListings = useCallback((data: Listing[]) => {
-    setListings((prev) => {
-      const byId = new Map(prev.map((x) => [x.id, x]))
-      for (const row of data) {
-        if (!byId.has(row.id)) byId.set(row.id, row)
-      }
-      return Array.from(byId.values())
-    })
-  }, [])
 
   return {
     query, setQuery,
-    reasoning, streaming, listings, newIds, error, done,
-    startSearch, mergeListings, setError,
+    reasoning, streaming, listings, error, done,
+    startSearch, setError,
   } as const
 }

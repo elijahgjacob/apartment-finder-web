@@ -12,17 +12,13 @@ interface SearchBarProps {
   onRequirementsChange: (r: string) => void
   onSubmit: (e: React.FormEvent) => void
   streaming: boolean
-  monitorBusy: boolean
-  watchOnSubmit: boolean
-  onWatchChange: (v: boolean) => void
 }
 
 export function SearchBar({
   query, onQueryChange,
   city, onCityChange,
   requirements, onRequirementsChange,
-  onSubmit, streaming, monitorBusy,
-  watchOnSubmit, onWatchChange,
+  onSubmit, streaming,
 }: SearchBarProps) {
   const [showReqs, setShowReqs] = useState(!!requirements)
 
@@ -101,29 +97,13 @@ export function SearchBar({
             autoFocus
           />
         </div>
-        <label
-          className="flex items-center gap-2 px-3 cursor-pointer select-none border-l shrink-0"
-          style={{ borderColor: Z.borderSoft }}
-          title="When checked, also save this query as the always-on watch. New matching listings will appear automatically over time."
-        >
-          <input
-            type="checkbox"
-            checked={watchOnSubmit}
-            onChange={(e) => onWatchChange(e.target.checked)}
-            className="w-4 h-4 cursor-pointer"
-            style={{ accentColor: Z.blue }}
-          />
-          <span className="text-xs font-bold uppercase tracking-[0.1em]" style={{ color: Z.textMid, fontFamily: FONT_HEADING }}>
-            Watch
-          </span>
-        </label>
         <button
           type="submit"
-          disabled={!query.trim() || monitorBusy}
+          disabled={!query.trim() || streaming}
           className="px-7 py-3 rounded-xl font-bold text-sm text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
           style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING, letterSpacing: "0.01em" }}
         >
-          {streaming ? "Searching…" : watchOnSubmit ? "Search & Watch" : "Search"}
+          {streaming ? "Searching…" : "Search"}
         </button>
       </div>
     </form>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 import uuid
@@ -17,12 +18,14 @@ from ..config import (
     FINDALL_GENERATOR,
     LISTING_SITES,
     RENT_FLOORS,
+    REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
 )
 from ..models.task import Task, TaskStatus
-from ..repositories.listing_repository import save_listing
 from ..utils.parsing import (
     _parse_int, _address_from_name, _output_val, _output_float, _output_bool,
+    _normalize_address,
 )
+from .geocode_service import geocode_address
 from .parallel_client import ParallelClient
 from .spam_service import _TRUSTED_SOURCES, score_listings_concurrently
 
@@ -82,6 +85,60 @@ def _absolute_min_price(beds: int | None) -> int:
         return 400
     typical = RENT_FLOORS.get(beds) or RENT_FLOORS.get(min(beds, 5)) or 800
     return int(typical * 0.55)
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    R = 6371
+    d_lat = math.radians(lat2 - lat1)
+    d_lng = math.radians(lng2 - lng1)
+    a = (
+        math.sin(d_lat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2))
+        * math.sin(d_lng / 2) ** 2
+    )
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _score_listing(listing: dict, budget: int) -> int:
+    """Equal-weight 3-factor score (recency + price fit + proximity), max 100.
+    Computed in-session — every result is freshly discovered, so recency is
+    always full. Proximity is measured to the configured reference point."""
+    score = 33  # recency: just discovered by this search
+
+    price = listing.get("price")
+    beds = listing.get("bedrooms")
+    if price:
+        typical = RENT_FLOORS.get(beds) if beds is not None else None
+        if typical is None and beds is not None:
+            typical = RENT_FLOORS.get(min(beds, 5))
+        ratio = price / budget if budget else 1.0
+        if ratio > 1.0:
+            price_pts = 0
+        elif typical is not None and price < typical * 0.6:
+            price_pts = 6
+        elif ratio <= 0.7:
+            price_pts = 33
+        elif ratio <= 0.8:
+            price_pts = 28
+        elif ratio <= 0.9:
+            price_pts = 22
+        else:
+            price_pts = 14
+        score += price_pts
+
+    lat, lng = listing.get("lat"), listing.get("lng")
+    if lat is not None and lng is not None:
+        km = _haversine_km(lat, lng, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG)
+        if km < 1.0:
+            score += 33
+        elif km < 2.5:
+            score += 24
+        elif km < 5.0:
+            score += 16
+        else:
+            score += 9
+
+    return min(score, 100)
 
 
 def _detect_source(url: str) -> str:
@@ -580,26 +637,39 @@ async def run_task(task: Task) -> None:
                         "text": f"Parsing {len(matched_candidates)} matches…\n"})
 
             listings: list[dict] = []
+            seen_addresses: set[str] = set()
             for c in matched_candidates:
                 l = _candidate_to_listing(c, min_beds=task.min_beds)
-                if l:
-                    # Record which city this search targeted so geocoding can
-                    # resolve the (city-less) street address to the right place.
-                    l.setdefault("details", {})["search_city"] = city
-                    listings.append(l)
+                if not l:
+                    continue
+                # De-dupe within this search only (no persistent store).
+                norm = _normalize_address(l.get("address") or "")
+                if norm and len(norm) > 3:
+                    if norm in seen_addresses:
+                        continue
+                    seen_addresses.add(norm)
+                listings.append(l)
 
             if listings:
                 task._push({"event": "reasoning",
                             "text": f"Spam-scoring {len([l for l in listings if l['source'] not in _TRUSTED_SOURCES])} untrusted-source listings…\n"})
                 await score_listings_concurrently(client, listings, concurrency=5)
 
-            saved = 0
+            sent = 0
             for l in listings:
-                listing_id = save_listing(l)
-                if listing_id is None:
-                    continue
-                l["id"] = listing_id
-                saved += 1
+                l["id"] = str(uuid.uuid4())
+
+                # Geocode live so the map has coordinates this session. The
+                # free geocoder self-throttles to ~1/sec, so run it off the
+                # event loop and let results stream in progressively.
+                addr = l.get("address")
+                if addr:
+                    coords = await asyncio.to_thread(geocode_address, addr, city)
+                    if coords:
+                        l["lat"], l["lng"] = coords
+
+                l["score"] = _score_listing(l, task.budget)
+                sent += 1
 
                 price_str = f"${l['price']:,}/mo" if l.get("price") else "—"
                 addr_str = l.get("address") or "—"
@@ -609,7 +679,7 @@ async def run_task(task: Task) -> None:
                             "text": f"  + {addr_str} — {bd} — {price_str}{spam}\n"})
                 task._push({"event": "listing", "listing": l})
 
-            task._push({"event": "reasoning", "text": f"\nDone. {saved} listings saved.\n"})
+            task._push({"event": "reasoning", "text": f"\nDone. {sent} listings found.\n"})
             task.status = TaskStatus.DONE
             task._push({"event": "status", "status": "done"})
 

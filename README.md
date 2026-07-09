@@ -13,22 +13,26 @@ AI-powered apartment search that discovers and verifies real listings using the 
 
 ```mermaid
 graph LR
-    A[Frontend<br/>Next.js] <-->|REST + SSE| B[Backend<br/>FastAPI]
+    A[Frontend<br/>Next.js] <-->|REST + SSE| B[Backend<br/>FastAPI · stateless]
     B <-->|FindAll API| C[Parallel API]
-    B <-->|Read/Write| D[(SQLite)]
+    A -.->|saved shortlist| E[(Browser<br/>localStorage)]
 ```
 
-The backend uses a **Routes-Controllers-Services-Repositories** (RCSR) pattern. The frontend is built with the **Next.js App Router**, React 19, and Tailwind CSS.
+**Stateless by design.** The backend keeps no database — each search runs live
+and streams verified listings to the browser over Server-Sent Events. Nothing is
+stored server-side. The only persistence is a user's saved shortlist, kept in
+their own browser (localStorage) and never sent to any server.
+
+The backend uses a **Routes-Controllers-Services** pattern. The frontend is built with the **Next.js App Router**, React 19, and Tailwind CSS.
 
 ## Features
 
-- **Automated search** — background loop discovers apartments across Zillow, Redfin, Apartments.com, Craigslist, and more
+- **Natural-language search** — describe what you want; the backend translates it into a Parallel FindAll run
 - **AI verification** — each candidate is validated against configurable match conditions (beds, budget, location, availability)
-- **Real-time streaming** — results stream to the frontend via Server-Sent Events
-- **Interactive map** — browse verified listings on a Leaflet map
-- **Scoring engine** — listings scored 0-100 on recency, price fit, and commute distance
-- **Monitoring** — continuous watch for new listings matching saved criteria
-- **Manual search** — on-demand searches via the search bar
+- **Real-time streaming** — results stream to the frontend via Server-Sent Events as they're found, geocoded, and scored
+- **Interactive map** — browse verified listings on a Leaflet map (coordinates resolved live during the search)
+- **Scoring engine** — listings scored 0-100 on price fit and proximity to the reference point
+- **Saved targets** — star listings you want to keep; the shortlist lives in your browser only
 
 ## Quick Start
 
@@ -67,7 +71,6 @@ apartment-finder-web/
 │   │   ├── routes/          # HTTP route definitions
 │   │   ├── controllers/     # Request validation
 │   │   ├── services/        # Business logic + Parallel API
-│   │   ├── repositories/    # SQLite data access
 │   │   ├── models/          # Pydantic models
 │   │   ├── middleware/      # Auth, CORS
 │   │   └── utils/           # Helpers
@@ -100,9 +103,9 @@ Key variables:
 | Variable | Description |
 |---|---|
 | `PARALLEL_API_KEY` | API key from platform.parallel.ai (required) |
-| `SEARCH_QUERY` | Default background search query |
-| `SEARCH_BUDGET` | Maximum monthly rent |
-| `SEARCH_INTERVAL_SECONDS` | Background search interval |
+| `SEARCH_QUERY` | Default search query shown in the UI |
+| `SEARCH_BUDGET` | Default maximum monthly rent |
+| `CITY` / `CITY_SHORT` | Default city a search targets (users can override per search) |
 
 ## Available Commands
 
