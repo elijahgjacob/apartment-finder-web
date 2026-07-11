@@ -39,6 +39,8 @@ export type Listing = {
   has_parking: boolean | null
   has_laundry: boolean | null
   spam_score: number
+  spam_flags?: string[]
+  needs_verification?: boolean
   body: string | null
   details?: ListingDetails
   phone?: string | null

@@ -150,6 +150,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const {
     query, setQuery,
     reasoning, streaming, listings, error, done, phase, startedAt,
+    fraudChecking, runFraudCheck,
     startSearch,
   } = useSearch()
 
@@ -177,6 +178,9 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   }
 
   const STRONG_FIT_THRESHOLD = 70
+  // Same threshold the original backend used (SPAM_HIDE_THRESHOLD): one
+  // canonical scam signal from the Task API secondary check trips it.
+  const SPAM_HIDE_THRESHOLD = 50
 
   const sortedListings = useMemo(
     () => [...listings].sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
@@ -185,22 +189,36 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const [showAllScores, setShowAllScores] = useState(false)
   const [showStale, setShowStale] = useState(false)
+  const [showSpam, setShowSpam] = useState(false)
+
+  const isSpam = useCallback(
+    (l: Listing) => (l.spam_score ?? 0) >= SPAM_HIDE_THRESHOLD,
+    [SPAM_HIDE_THRESHOLD],
+  )
 
   const filteredListings = useMemo(() => {
     return sortedListings.filter((l) => {
-      if (!showAllScores && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
+      // While a search is streaming, show every verified card in live time —
+      // provisional scores lack proximity/price points until finalize, so the
+      // strong-fit bar only applies once the run completes.
+      if (!streaming && !showAllScores && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
       if (!showStale && isStale(l)) return false
+      if (!showSpam && isSpam(l)) return false
       return true
     })
-  }, [sortedListings, showAllScores, showStale, isStale])
+  }, [sortedListings, streaming, showAllScores, showStale, showSpam, isStale, isSpam])
 
   const hiddenLowScoreCount = useMemo(
-    () => sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l))).length,
-    [sortedListings, showStale, isStale],
+    () => streaming ? 0 : sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l)) && (showSpam || !isSpam(l))).length,
+    [sortedListings, streaming, showStale, showSpam, isStale, isSpam],
   )
   const hiddenStaleCount = useMemo(
     () => sortedListings.filter((l) => isStale(l) && (showAllScores || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
     [sortedListings, showAllScores, isStale],
+  )
+  const hiddenSpamCount = useMemo(
+    () => sortedListings.filter((l) => isSpam(l)).length,
+    [sortedListings, isSpam],
   )
 
   const savedSorted = useMemo(
@@ -302,6 +320,33 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               <div className="flex-1">
                 <StatsBar listings={visibleListings} />
               </div>
+              {done && listings.some((l) => l.needs_verification) && (
+                <button
+                  type="button"
+                  onClick={() => void runFraudCheck()}
+                  disabled={fraudChecking}
+                  className="px-4 py-2 rounded-xl text-sm font-bold transition-all hover:brightness-105 active:scale-[0.98] disabled:opacity-60 shrink-0 inline-flex items-center gap-2"
+                  style={{
+                    backgroundColor: Z.bgCard,
+                    color: Z.red,
+                    border: `1px solid #F4B5B5`,
+                    fontFamily: FONT_HEADING,
+                  }}
+                  title="Second run via the Parallel Task API: verifies fact-based scam signals (off-platform payment, owner abroad, withheld address, no viewings, unusual incentives) on each untrusted-source listing."
+                >
+                  {fraudChecking ? (
+                    <>
+                      <span
+                        className="inline-block w-3.5 h-3.5 rounded-full animate-spin"
+                        style={{ border: `2px solid #F4B5B5`, borderTopColor: Z.red }}
+                      />
+                      Checking…
+                    </>
+                  ) : (
+                    <>🛡 Run fraud check</>
+                  )}
+                </button>
+              )}
               <ViewToggle view={view} onChange={setView} savedCount={saved.length} />
             </div>
 
@@ -344,10 +389,13 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                       streaming={false}
                       hiddenLowScoreCount={0}
                       hiddenStaleCount={0}
+                      hiddenSpamCount={0}
                       showAllScores
                       showStale
+                      showSpam
                       onToggleScores={() => {}}
                       onToggleStale={() => {}}
+                      onToggleSpam={() => {}}
                     />
                   </>
                 )}
@@ -368,12 +416,16 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                     onHover={(id) => setHoveredId(id)}
                     onLeave={() => setHoveredId(null)}
                     streaming={streaming}
+                    fraudChecking={fraudChecking}
                     hiddenLowScoreCount={hiddenLowScoreCount}
                     hiddenStaleCount={hiddenStaleCount}
+                    hiddenSpamCount={hiddenSpamCount}
                     showAllScores={showAllScores}
                     showStale={showStale}
+                    showSpam={showSpam}
                     onToggleScores={() => setShowAllScores((v) => !v)}
                     onToggleStale={() => setShowStale((v) => !v)}
+                    onToggleSpam={() => setShowSpam((v) => !v)}
                   />
                 </div>
               </div>
