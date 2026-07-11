@@ -288,7 +288,16 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
           <SearchSuggestions
             suggestions={config.suggestions}
-            onSelect={(s) => { setQuery(s); startSearch(s, effectiveBudget, { city, requirements: requirements || undefined }) }}
+            onSelect={(s) => {
+              setQuery(s)
+              // Parse budget/beds from the clicked suggestion itself —
+              // `effectiveBudget` still reflects the previous query text
+              // during this event (state hasn't re-rendered yet).
+              const beds = extractBedsFromQuery(s)
+              const budget = extractBudgetFromQuery(s)
+                ?? defaultBudgetForBeds(beds, config.rentFloors, config.defaultBudget)
+              startSearch(s, budget, { city, requirements: requirements || undefined })
+            }}
             parsedBeds={parsedBeds}
             parsedBudget={parsedBudget}
             effectiveBudget={effectiveBudget}
