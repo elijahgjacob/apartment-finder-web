@@ -62,8 +62,11 @@ def _parse_rent_floors(raw: str) -> dict[int, int]:
             continue
     return out
 
+# Typical monthly-rent floors by bedroom count for the default city (SF).
+# Drives the auto-budget when a query omits one, and the price-fit score.
+# Override via RENT_FLOORS env for a cheaper/pricier market.
 RENT_FLOORS = _parse_rent_floors(os.environ.get(
-    "RENT_FLOORS", "0:800,1:1000,2:1200,3:1500,4:2000,5:2500",
+    "RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000",
 ))
 
 AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
