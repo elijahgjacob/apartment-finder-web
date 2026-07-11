@@ -7,6 +7,7 @@ interface SearchSuggestionsProps {
   onSelect: (s: string) => void
   parsedBeds: number | null
   parsedBudget: number | null
+  parsedNeighborhoods: string[]
   effectiveBudget: number
   budgetLikelyTooLow: boolean
   floor: number | null
@@ -17,16 +18,26 @@ interface SearchSuggestionsProps {
 
 export function SearchSuggestions({
   suggestions, onSelect,
-  parsedBeds, parsedBudget, effectiveBudget,
+  parsedBeds, parsedBudget, parsedNeighborhoods, effectiveBudget,
   budgetLikelyTooLow, floor, city, query, onQueryChange,
 }: SearchSuggestionsProps) {
   return (
     <>
-      {(parsedBeds != null || parsedBudget != null) && (
+      {(parsedBeds != null || parsedBudget != null || parsedNeighborhoods.length > 0) && (
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: Z.textFaint }}>
             Parsed
           </span>
+          {parsedNeighborhoods.map((n) => (
+            <span
+              key={n}
+              className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+              style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
+              title="Neighborhood recognized in your query — the search will prioritize it"
+            >
+              📍 {n}
+            </span>
+          ))}
           {parsedBeds != null && (
             <span
               className="text-[11px] px-2 py-0.5 rounded-full font-semibold"

@@ -6,7 +6,7 @@ import { escapeHtml } from "@/lib/utils"
 import type { AppConfig, Listing } from "@/types"
 
 const Z_BLUE = "#fb631b"
-const Z_BLUE_DARK = "#cb4f12"
+const Z_BLUE_DARK = "#1D4ED8"
 const Z_GREEN = "#137333"
 const Z_AMBER = "#C77700"
 const Z_RED = "#C62828"

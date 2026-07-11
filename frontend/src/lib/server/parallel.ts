@@ -207,6 +207,7 @@ export async function findallCreate(opts: {
   budget: number
   city?: string | null
   requirements?: string | null
+  neighborhoods?: string[] | null
   minBeds?: number | null
 }): Promise<FindAllCreateResult> {
   const city = opts.city?.trim() || CITY_SHORT
@@ -216,6 +217,9 @@ export async function findallCreate(opts: {
     `under ${opts.budget} dollars per month in ${city}`
   if (opts.query && !opts.query.toLowerCase().includes(city.toLowerCase())) {
     objective += `. ${opts.query}`
+  }
+  if (opts.neighborhoods?.length) {
+    objective += `. Prioritize listings in these ${city} neighborhoods: ${opts.neighborhoods.join(", ")}`
   }
   if (opts.requirements) objective += `. Requirements: ${opts.requirements}`
 

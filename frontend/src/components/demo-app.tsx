@@ -14,6 +14,7 @@ import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
 import { Z, FONT_HEADING, FONT_BODY } from "@/lib/palette"
+import { extractNeighborhoodsFromQuery } from "@/lib/neighborhoods"
 import type { AppConfig, Listing, ViewMode } from "@/types"
 
 const ApartmentMap = dynamic(
@@ -158,6 +159,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
+  const parsedNeighborhoods = useMemo(() => extractNeighborhoodsFromQuery(query, city), [query, city])
   const effectiveBudget = useMemo(
     () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, config.rentFloors, config.defaultBudget),
     [parsedBudget, parsedBeds, config.rentFloors, config.defaultBudget],
@@ -174,7 +176,11 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setView("list")
-    startSearch(query, effectiveBudget, { city, requirements: requirements || undefined })
+    startSearch(query, effectiveBudget, {
+      city,
+      requirements: requirements || undefined,
+      neighborhoods: parsedNeighborhoods.length ? parsedNeighborhoods : undefined,
+    })
   }
 
   const STRONG_FIT_THRESHOLD = 70
@@ -296,10 +302,16 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               const beds = extractBedsFromQuery(s)
               const budget = extractBudgetFromQuery(s)
                 ?? defaultBudgetForBeds(beds, config.rentFloors, config.defaultBudget)
-              startSearch(s, budget, { city, requirements: requirements || undefined })
+              const hoods = extractNeighborhoodsFromQuery(s, city)
+              startSearch(s, budget, {
+                city,
+                requirements: requirements || undefined,
+                neighborhoods: hoods.length ? hoods : undefined,
+              })
             }}
             parsedBeds={parsedBeds}
             parsedBudget={parsedBudget}
+            parsedNeighborhoods={parsedNeighborhoods}
             effectiveBudget={effectiveBudget}
             budgetLikelyTooLow={budgetLikelyTooLow}
             floor={floor}
