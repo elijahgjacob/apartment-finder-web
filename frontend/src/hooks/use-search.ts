@@ -103,7 +103,7 @@ export function useSearch() {
   const startSearch = useCallback(async (
     q: string,
     budget: number,
-    opts: { city?: string; requirements?: string } = {},
+    opts: { city?: string; requirements?: string; neighborhoods?: string[] } = {},
   ) => {
     if (!q.trim()) return
     const gen = ++genRef.current
@@ -129,6 +129,7 @@ export function useSearch() {
       const body: Record<string, unknown> = { query: q, budget }
       if (opts.city) body.city = opts.city
       if (opts.requirements) body.requirements = opts.requirements
+      if (opts.neighborhoods?.length) body.neighborhoods = opts.neighborhoods
       const created = await fetchJson<{ runId: string; objective: string; minBeds: number | null }>(
         api("/api/search"),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },

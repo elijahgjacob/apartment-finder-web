@@ -98,6 +98,11 @@ const SEARCH_PAGE_PATTERNS = [
   /\/\d+-bedroom-apartments/i,
   /\/rentals$/i,
   /\/apartments\/[a-z-]+(?:\/|$)/i,
+  // Search-results pages, not individual listings (e.g. craigslist
+  // /search/apa?query=..., generic ?q=/query= result URLs).
+  /\/search[/?#]/i,
+  /[?&](?:query|q|search|searchQueryState)=/i,
+  /#search/i,
 ]
 
 const JUNK_ADDRESS_PATTERNS = [

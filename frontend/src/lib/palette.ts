@@ -1,10 +1,14 @@
 export const Z = {
+  // `blue` is the Parallel brand orange, kept for primary CTAs and fills.
+  // The rest of the family is a true blue: rust-orange links and accents
+  // read as error-red (George's feedback), so interactive/selected states
+  // use blue and red stays reserved for fraud/error semantics.
   blue: "#fb631b",
-  blueDark: "#cb4f12",
-  blueDarker: "#8a3608",
-  blueSoft: "#fff0e8",
-  blueSofter: "#fffaf6",
-  blueBorder: "#fcc7a8",
+  blueDark: "#1D4ED8",
+  blueDarker: "#1E40AF",
+  blueSoft: "#EFF6FF",
+  blueSofter: "#F8FAFF",
+  blueBorder: "#BFDBFE",
   text: "#1d1b16",
   textSoft: "#3a352a",
   textMid: "#5e574a",

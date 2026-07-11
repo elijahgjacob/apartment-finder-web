@@ -6,7 +6,7 @@ import { DEFAULT_BUDGET } from "@/lib/server/config"
 // Create a FindAll run. The server holds no state — the client keeps the
 // returned runId and drives the poll/enrich steps.
 export async function POST(req: NextRequest) {
-  let body: { query?: string; budget?: number; city?: string; requirements?: string }
+  let body: { query?: string; budget?: number; city?: string; requirements?: string; neighborhoods?: string[] }
   try {
     body = await req.json()
   } catch {
@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
       query, budget,
       city: body.city ?? null,
       requirements: body.requirements ?? null,
+      neighborhoods: Array.isArray(body.neighborhoods)
+        ? body.neighborhoods.filter((n) => typeof n === "string" && n.trim()).slice(0, 8)
+        : null,
       minBeds,
     })
     return NextResponse.json({ runId: findallId, objective, minBeds, budget })

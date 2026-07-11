@@ -235,7 +235,8 @@ function ArchDiagram() {
           </filter>
         </defs>
         <rect x={COL - 16} y={12} width={252} height={912} rx={16} fill={Z.bgPage} opacity={0.6} />
-        <text x={CX} y={6} textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">SEARCH → STREAM (STATELESS)</text>
+        {/* Baseline y must be >= ~8 so the 10px caps stay inside the viewBox. */}
+        <text x={CX} y={10} textAnchor="middle" fontSize="10" fontWeight="700" fill={Z.textFaint} letterSpacing="0.14em">SEARCH → STREAM (STATELESS)</text>
         {arrows.map((a, i) => {
           const isHorizontal = Math.abs(a.y1 - a.y2) < 1
           const mark = isHorizontal ? undefined : "url(#arrowhead)"

@@ -19,6 +19,7 @@ interface ListingCardProps {
   city: string
   stale: boolean
   saved: boolean
+  candidate?: boolean
   fraudChecking?: boolean
   onToggleSave: () => void
   isHovered?: boolean
@@ -27,7 +28,7 @@ interface ListingCardProps {
 }
 
 export function ListingCard({
-  l, idx, city, stale, saved, fraudChecking, onToggleSave, isHovered, onHover, onLeave,
+  l, idx, city, stale, saved, candidate, fraudChecking, onToggleSave, isHovered, onHover, onLeave,
 }: ListingCardProps) {
   const searchFallback = `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
   const href = safeUrl(l.url, searchFallback)
@@ -78,6 +79,15 @@ export function ListingCard({
             title="Match score: price fit + proximity to reference point"
           >
             {l.score}/100
+          </span>
+        )}
+        {candidate && (
+          <span
+            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+            style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
+            title="Search still running — this is a candidate, not a verified match yet. Details and links may change or drop out."
+          >
+            candidate
           </span>
         )}
         {stale && (

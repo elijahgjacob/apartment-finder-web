@@ -54,6 +54,7 @@ export function ListingGrid({
           key={l.id} l={l} idx={i} city={city}
           stale={isStale(l)}
           saved={isSaved(l)}
+          candidate={streaming}
           fraudChecking={fraudChecking}
           onToggleSave={() => onToggleSave(l)}
           isHovered={hoveredId === l.id}
@@ -104,17 +105,15 @@ function SpamToggle({ hiddenCount, showSpam, onToggle }: { hiddenCount: number; 
   )
 }
 
+// Mirrors the real ListingCard layout — no photo block, since result cards
+// never render images.
 function SkeletonCard() {
   return (
     <div
-      className="rounded-2xl flex flex-col sm:flex-row overflow-hidden"
+      className="rounded-2xl overflow-hidden"
       style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}
     >
-      <div
-        className="w-full sm:w-44 h-32 sm:h-auto shrink-0 animate-pulse"
-        style={{ backgroundColor: Z.bgSubtle }}
-      />
-      <div className="flex-1 p-5 space-y-3">
+      <div className="p-5 space-y-3">
         <div className="h-3 w-24 rounded animate-pulse" style={{ backgroundColor: Z.bgSubtle }} />
         <div className="h-5 w-3/4 rounded animate-pulse" style={{ backgroundColor: Z.bgSubtle }} />
         <div className="h-4 w-1/2 rounded animate-pulse" style={{ backgroundColor: Z.bgSubtle }} />
