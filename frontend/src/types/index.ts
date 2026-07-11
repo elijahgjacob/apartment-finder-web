@@ -36,6 +36,7 @@ export type Listing = {
   neighborhood: string | null
   lat: number | null
   lng: number | null
+  geo_precision?: "address" | "neighborhood" | null
   has_parking: boolean | null
   has_laundry: boolean | null
   spam_score: number

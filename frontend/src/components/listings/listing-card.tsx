@@ -61,9 +61,13 @@ export function ListingCard({
           {idx + 1}
         </span>
         {l.neighborhood && (
-          <span className="inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: Z.textMid }}>
+          <span
+            className="inline-flex items-center gap-1 text-[11px] font-semibold"
+            style={{ color: Z.textMid }}
+            title={l.geo_precision === "neighborhood" ? "Map location approximated to the neighborhood center" : undefined}
+          >
             <PinIcon size={10} color={Z.textFaint} />
-            {l.neighborhood}
+            {l.neighborhood}{l.geo_precision === "neighborhood" ? " ≈" : ""}
           </span>
         )}
         <span
@@ -76,7 +80,7 @@ export function ListingCard({
           <span
             className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
             style={{ backgroundColor: scoreP.bg, color: scoreP.fg, border: `1px solid ${scoreP.border}` }}
-            title="Match score: price fit + proximity to reference point"
+            title="Match score: price fit + proximity to reference point. Proximity is discounted for neighborhood-level locations and neutral when the address can't be geocoded."
           >
             {l.score}/100
           </span>

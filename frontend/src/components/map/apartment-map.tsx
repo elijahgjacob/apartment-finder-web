@@ -73,6 +73,18 @@ function makeRefIcon() {
   })
 }
 
+// Neighborhood-precision listings all sit on the same centroid; spread them
+// with a deterministic ~±150m jitter (hashed from the listing id) so their
+// price tags don't stack into one unreadable pile.
+function displayCoords(l: Listing): L.LatLngTuple {
+  if (l.geo_precision !== "neighborhood") return [l.lat!, l.lng!]
+  let h = 0
+  for (let i = 0; i < l.id.length; i++) h = (h * 31 + l.id.charCodeAt(i)) | 0
+  const dLat = (((h & 0xff) / 255) - 0.5) * 0.0028
+  const dLng = ((((h >> 8) & 0xff) / 255) - 0.5) * 0.0028
+  return [l.lat! + dLat, l.lng! + dLng]
+}
+
 type MapProps = {
   listings: Listing[]
   config: AppConfig | null
@@ -131,18 +143,20 @@ export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, heigh
     const bounds: L.LatLngTuple[] = []
     for (const l of listings) {
       if (l.lat == null || l.lng == null) continue
-      bounds.push([l.lat, l.lng])
-      const marker = L.marker([l.lat, l.lng], { icon: makePriceTag(l, false) })
+      const pos = displayCoords(l)
+      bounds.push(pos)
+      const marker = L.marker(pos, { icon: makePriceTag(l, false) })
       marker.addTo(layerRef.current!)
       // Listing text is scraped/LLM-extracted (untrusted) and Leaflet injects
       // this string as raw HTML — escape every interpolated field.
       const name = escapeHtml(l.address || l.title || "—")
       const price = l.price ? `$${l.price.toLocaleString()}/mo` : "—"
       const beds = l.bedrooms != null ? `${l.bedrooms}bd` : ""
+      const approx = l.geo_precision === "neighborhood" ? "≈ neighborhood-level location" : ""
       marker.bindTooltip(
         `<div style="font-family:'Geist Variable',system-ui,sans-serif;font-size:12px;line-height:1.4;color:#0E1117;">
           <strong style="display:block;margin-bottom:2px;">${name}</strong>
-          <span style="color:#5C6370;">${escapeHtml([beds, price].filter(Boolean).join(" · "))}</span>
+          <span style="color:#5C6370;">${escapeHtml([beds, price, approx].filter(Boolean).join(" · "))}</span>
         </div>`,
         { direction: "top", offset: [0, -8], className: "zillow-map-tooltip" },
       )
