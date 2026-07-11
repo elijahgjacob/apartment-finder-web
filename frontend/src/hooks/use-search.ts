@@ -4,14 +4,85 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import { api } from "@/lib/api"
 import type { Listing } from "@/types"
 
-function parseEventData<T>(e: Event): T | null {
-  try {
-    return JSON.parse((e as MessageEvent).data) as T
-  } catch {
-    return null
-  }
+export type SearchPhase = { key: "discover" | "extract" | "finalize" | "done"; detail: string }
+
+type PollResponse = {
+  state: string
+  generated: number
+  matched: number
+  rentPopulated: number
+  candidateCount: number
+  listings: Listing[]
 }
 
+const POLL_MS = 5000
+const MAX_POLLS = 90 // ~7.5 min safety cap
+const VERIFY_POLL_MS = 5000
+const VERIFY_MAX_POLLS = 24 // ~2 min per listing
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
+// Task-API fraud check: verify each flagged listing's fact-based scam
+// signals and fold the verdict back into the rendered cards.
+async function verifyListings(
+  all: Listing[],
+  live: () => boolean,
+  say: (text: string) => void,
+  setListings: React.Dispatch<React.SetStateAction<Listing[]>>,
+) {
+  const targets = all.filter((l) => l.needs_verification)
+  if (!targets.length) return
+  say(`\nFraud check: verifying ${targets.length} untrusted-source listing${targets.length === 1 ? "" : "s"} via Task API…\n`)
+
+  await Promise.all(targets.map(async (l) => {
+    try {
+      const { runId } = await fetchJson<{ runId: string }>(api("/api/verify"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: l.title, body: l.body, price: l.price, address: l.address, source: l.source,
+        }),
+      })
+      for (let i = 0; i < VERIFY_MAX_POLLS; i++) {
+        await sleep(VERIFY_POLL_MS)
+        if (!live()) return
+        const v = await fetchJson<{ done: boolean; spamScore?: number; flags?: string[] }>(
+          api(`/api/verify/${runId}`),
+        ).catch(() => null)
+        if (!v) continue
+        if (!v.done) continue
+        const score = v.spamScore ?? 0
+        const flags = v.flags ?? []
+        if (!live()) return
+        setListings((prev) => prev.map((x) =>
+          x.id === l.id ? { ...x, spam_score: score, spam_flags: flags, needs_verification: false } : x,
+        ))
+        if (score > 0) {
+          say(`  ⚠ ${l.address ?? l.title ?? "listing"} — spam:${score} (${flags.join(", ")})\n`)
+        }
+        return
+      }
+    } catch {
+      // Verification is best-effort; the card simply keeps spam_score 0.
+    }
+  }))
+  if (live()) say("Fraud check complete.\n")
+}
+
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, init)
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({} as { detail?: string }))
+    throw new Error((j as { detail?: string }).detail ?? `HTTP ${res.status}`)
+  }
+  return res.json() as Promise<T>
+}
+
+// Serverless-friendly search: create a FindAll run, then drive it from the
+// client — poll discovery, kick enrichment, poll again, finalize (geocode +
+// score). The server holds no state; this hook owns the whole lifecycle.
 export function useSearch() {
   const [query, setQuery] = useState("")
   const [reasoning, setReasoning] = useState("")
@@ -19,7 +90,15 @@ export function useSearch() {
   const [listings, setListings] = useState<Listing[]>([])
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
-  const evtRef = useRef<EventSource | null>(null)
+  const [phase, setPhase] = useState<SearchPhase | null>(null)
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [fraudChecking, setFraudChecking] = useState(false)
+  // Bumped on every new search and on unmount so an abandoned loop exits.
+  const genRef = useRef(0)
+  // Mirror of `listings` so runFraudCheck can read the current set without
+  // re-creating its callback on every update.
+  const listingsRef = useRef<Listing[]>([])
+  useEffect(() => { listingsRef.current = listings }, [listings])
 
   const startSearch = useCallback(async (
     q: string,
@@ -27,71 +106,183 @@ export function useSearch() {
     opts: { city?: string; requirements?: string } = {},
   ) => {
     if (!q.trim()) return
-    evtRef.current?.close()
+    const gen = ++genRef.current
+    const live = () => genRef.current === gen
+
     setReasoning("")
     setListings([])
     setError(null)
     setDone(false)
     setStreaming(true)
+    setPhase({ key: "discover", detail: "Starting…" })
+    setStartedAt(Date.now())
+
+    const say = (text: string) => { if (live()) setReasoning((p) => p + text) }
+    const fail = (msg: string) => {
+      if (!live()) return
+      setStreaming(false)
+      setError(msg)
+    }
 
     try {
+      // 1) Create the run.
       const body: Record<string, unknown> = { query: q, budget }
       if (opts.city) body.city = opts.city
       if (opts.requirements) body.requirements = opts.requirements
-      const res = await fetch(api("/api/tasks"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        setError(j.detail ?? `HTTP ${res.status}`)
+      const created = await fetchJson<{ runId: string; objective: string; minBeds: number | null }>(
+        api("/api/search"),
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
+      )
+      if (!live()) return
+      const { runId, objective, minBeds } = created
+
+      say(`Objective: ${objective}\n`)
+      say(`Budget: $${budget.toLocaleString()}/mo`)
+      if (minBeds) say(` · ${minBeds}+ beds`)
+      say(`\n\nStarting entity discovery…\nRun: ${runId}\nSearching and verifying candidates…\n\n`)
+
+      const pollUrl = api(
+        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}`,
+      )
+
+      // 2) Drive the run: discover → enrich → extract → finalize.
+      let enrichStarted = false
+      let prevGenerated = -1
+      let prevMatched = -1
+      let prevReady = -1
+      const seenIds = new Set<string>()
+
+      // Add newly verified listings to the UI in live time; enrichment
+      // updates existing cards in place (ids are stable listing URLs).
+      const mergeIncoming = (incoming: Listing[]) => {
+        for (const l of incoming) {
+          if (!seenIds.has(l.id)) {
+            seenIds.add(l.id)
+            say(`  + verified: ${l.address ?? l.title ?? l.url}\n`)
+          }
+        }
+        setListings((prev) => {
+          const byId = new Map(prev.map((x) => [x.id, x]))
+          const merged = [...prev]
+          for (const l of incoming) {
+            const existing = byId.get(l.id)
+            if (!existing) {
+              merged.push(l)
+            } else {
+              const idx = merged.findIndex((x) => x.id === l.id)
+              // Keep client-side fields (coords, spam verdicts) if already set.
+              merged[idx] = {
+                ...existing, ...l,
+                lat: existing.lat ?? l.lat,
+                lng: existing.lng ?? l.lng,
+                spam_score: existing.spam_score || l.spam_score,
+                spam_flags: existing.spam_flags ?? l.spam_flags,
+              }
+            }
+          }
+          return merged
+        })
+      }
+
+      for (let i = 0; i < MAX_POLLS; i++) {
+        await sleep(POLL_MS)
+        if (!live()) return
+
+        let poll: PollResponse
+        try {
+          poll = await fetchJson<PollResponse>(pollUrl)
+        } catch {
+          continue // transient poll failure — try again next tick
+        }
+        if (!live()) return
+
+        if (poll.listings.length) mergeIncoming(poll.listings)
+
+        if (!enrichStarted) {
+          if (poll.generated !== prevGenerated || poll.matched !== prevMatched) {
+            say(`Progress: ${poll.generated} found, ${poll.matched} verified\n`)
+            setPhase({
+              key: "discover",
+              detail: `Verifying candidates — ${poll.generated} found · ${poll.matched} match`,
+            })
+            prevGenerated = poll.generated
+            prevMatched = poll.matched
+          }
+          if (poll.state === "completed") {
+            say(`\nVerified ${poll.matched}. Extracting listing details…\n`)
+            setPhase({ key: "extract", detail: "Extracting price, beds & address…" })
+            try {
+              await fetchJson(api(`/api/search/${runId}/enrich`), { method: "POST" })
+            } catch (e) {
+              fail(e instanceof Error ? e.message : "enrichment failed")
+              return
+            }
+            enrichStarted = true
+            await sleep(POLL_MS) // let the enrich job flip status to running
+          }
+          continue
+        }
+
+        // Enrichment phase: narrate fill-in progress; wait for completion.
+        const total = poll.candidateCount || 1
+        if (poll.rentPopulated !== prevReady) {
+          say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
+          setPhase({ key: "extract", detail: `Extracting details — ${poll.rentPopulated}/${total} ready` })
+          prevReady = poll.rentPopulated
+        }
+        if (poll.state !== "completed") continue
+
+        // 3) Finalize: geocode + score everything in one server call.
+        setPhase({ key: "finalize", detail: "Mapping & scoring listings…" })
+        say("\nMapping & scoring…\n")
+        const cityParam = opts.city ? `&city=${encodeURIComponent(opts.city)}` : ""
+        const fin = await fetchJson<{ listings: Listing[] }>(
+          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`),
+        )
+        if (!live()) return
+
+        for (const l of fin.listings) {
+          const price = l.price ? `$${l.price.toLocaleString()}/mo` : "—"
+          const bd = l.bedrooms != null ? `${l.bedrooms}bd` : "?bd"
+          say(`  + ${l.address ?? "—"} — ${bd} — ${price}\n`)
+        }
+        say(`\nDone. ${fin.listings.length} listings found.\n`)
+        setListings(fin.listings)
+        setPhase({ key: "done", detail: `${fin.listings.length} listing${fin.listings.length === 1 ? "" : "s"} found` })
         setStreaming(false)
+        setDone(true)
         return
       }
-      const { task_id } = await res.json()
-      const evt = new EventSource(api(`/api/tasks/${task_id}/stream`))
-      evtRef.current = evt
 
-      evt.addEventListener("reasoning", (e) => {
-        const d = parseEventData<{ text: string }>(e)
-        if (d?.text) setReasoning((p) => p + d.text)
-      })
-      evt.addEventListener("listing", (e) => {
-        const d = parseEventData<{ listing: Listing }>(e)
-        const incoming = d?.listing
-        if (!incoming?.id) return
-        setListings((p) => (p.find((x) => x.id === incoming.id) ? p : [...p, incoming]))
-      })
-      evt.addEventListener("status", (e) => {
-        const d = parseEventData<{ status: string }>(e)
-        if (d?.status === "done") {
-          evt.close(); setStreaming(false); setDone(true)
-        }
-      })
-      let gotNamedError = false
-      evt.addEventListener("error", (e) => {
-        const d = parseEventData<{ message: string }>(e)
-        gotNamedError = true
-        evt.close(); setStreaming(false); setError(d?.message ?? "Search failed")
-      })
-      evt.onerror = () => {
-        evt.close(); setStreaming(false)
-        if (!gotNamedError) setError("Connection lost")
-      }
+      fail("Search timed out — please try again")
     } catch (err) {
-      setStreaming(false)
-      setError(err instanceof Error ? err.message : "Search failed")
+      fail(err instanceof Error ? err.message : "Search failed")
     }
   }, [])
 
-  // Close any live SSE stream when the hook unmounts so the connection and
-  // its listeners don't leak.
-  useEffect(() => () => evtRef.current?.close(), [])
+  // User-triggered second run: fraud-check the current results via the
+  // Task API. Badges on the cards update live as verdicts land.
+  const runFraudCheck = useCallback(async () => {
+    const gen = genRef.current
+    const live = () => genRef.current === gen
+    const say = (text: string) => { if (live()) setReasoning((p) => p + text) }
+    const targets = listingsRef.current.filter((l) => l.needs_verification)
+    if (!targets.length || fraudChecking) return
+    setFraudChecking(true)
+    try {
+      await verifyListings(listingsRef.current, live, say, setListings)
+    } finally {
+      if (live()) setFraudChecking(false)
+    }
+  }, [fraudChecking])
+
+  // Abandon any in-flight loop when the component unmounts.
+  useEffect(() => () => { genRef.current++ }, [])
 
   return {
     query, setQuery,
-    reasoning, streaming, listings, error, done,
+    reasoning, streaming, listings, error, done, phase, startedAt,
+    fraudChecking, runFraudCheck,
     startSearch, setError,
   } as const
 }

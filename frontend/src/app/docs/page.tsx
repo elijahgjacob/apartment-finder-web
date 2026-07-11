@@ -88,7 +88,9 @@ function Card({ children, accent }: { children: React.ReactNode; accent?: string
     <div
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${Z.border}`,
+        borderTop: `1px solid ${Z.border}`,
+        borderRight: `1px solid ${Z.border}`,
+        borderBottom: `1px solid ${Z.border}`,
         borderLeft: accent ? `3px solid ${accent}` : `1px solid ${Z.border}`,
         borderRadius: 12,
         padding: "18px 20px",

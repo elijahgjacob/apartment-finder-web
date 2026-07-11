@@ -16,6 +16,8 @@ from ..config import (
     BLOCKED_DOMAINS,
     CITY_SHORT,
     FINDALL_GENERATOR,
+    FINDALL_MATCH_LIMIT,
+    FINDALL_ENRICH_PROCESSOR,
     LISTING_SITES,
     RENT_FLOORS,
     REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
@@ -27,7 +29,6 @@ from ..utils.parsing import (
 )
 from .geocode_service import geocode_address
 from .parallel_client import ParallelClient
-from .spam_service import _TRUSTED_SOURCES, score_listings_concurrently
 
 
 # ── Task / SSE plumbing ──────────────────────────────────────────────────
@@ -548,6 +549,20 @@ def _enrichments() -> list[dict]:
     ]
 
 
+def _enrichment_output_schema() -> dict:
+    """FindAll returns only match-condition fields inline; the per-listing
+    facts (price, beds, address, …) come from a dedicated enrichment pass.
+    Build its JSON schema from the same field set used for discovery."""
+    props = {e["name"]: {"type": "string", "description": e["description"]}
+             for e in _enrichments()}
+    return {
+        "type": "object",
+        "properties": props,
+        "required": list(props.keys()),
+        "additionalProperties": False,
+    }
+
+
 # ── Main task runner ─────────────────────────────────────────────────────
 
 async def run_task(task: Task) -> None:
@@ -586,7 +601,7 @@ async def run_task(task: Task) -> None:
                 match_conditions=_match_conditions(task.min_beds, task.budget, city),
                 enrichments=_enrichments(),
                 generator=FINDALL_GENERATOR,
-                match_limit=25,
+                match_limit=FINDALL_MATCH_LIMIT,
             )
             findall_id = run_data.get("findall_id") or run_data.get("run_id")
             if not findall_id:
@@ -595,11 +610,14 @@ async def run_task(task: Task) -> None:
                 return
             task._push({"event": "reasoning", "text": f"Run: {findall_id}\n"})
             task._push({"event": "reasoning", "text": "Searching and verifying candidates…\n\n"})
+            task._push({"event": "phase", "key": "discover",
+                        "detail": "Searching the web for listings…"})
 
-            prev_generated = 0
-            prev_matched = 0
-            for _ in range(120):  # up to 16 min with 8s interval
-                await asyncio.sleep(8)
+            # 1) Discovery — wait for FindAll to verify matching listings.
+            prev_generated = prev_matched = 0
+            state = ""
+            for _ in range(90):  # safety cap (~9 min at 6s)
+                await asyncio.sleep(6)
                 task._push({"event": "ping", "ts": datetime.now(timezone.utc).isoformat()})
 
                 try:
@@ -616,70 +634,112 @@ async def run_task(task: Task) -> None:
                     metrics = status_resp.get("metrics", {})
                 generated = metrics.get("generated_candidates_count", 0)
                 matched = metrics.get("matched_candidates_count", 0)
-
                 if generated != prev_generated or matched != prev_matched:
                     task._push({"event": "reasoning",
-                                "text": f"Progress: {generated} candidates, {matched} verified\n"})
-                    prev_generated = generated
-                    prev_matched = matched
+                                "text": f"Progress: {generated} found, {matched} verified\n"})
+                    task._push({"event": "phase", "key": "discover",
+                                "detail": f"Verifying candidates — {generated} found · {matched} match"})
+                    prev_generated, prev_matched = generated, matched
 
                 if state == "completed":
                     task._push({"event": "reasoning",
-                                "text": f"\nDiscovery done: {matched} verified.\n"})
+                                "text": f"\nVerified {matched}. Extracting listing details…\n"})
                     break
 
-            result_data = await client.findall_result(findall_id)
-            matched_candidates = [
-                c for c in (result_data.get("candidates") or [])
-                if c.get("match_status") == "matched"
-            ]
-            task._push({"event": "reasoning",
-                        "text": f"Parsing {len(matched_candidates)} matches…\n"})
+            # 2) Enrichment — discovery only returns match-condition text, so
+            #    run a structured pass to fill in price, beds, address, etc.
+            try:
+                await client.findall_enrich(
+                    findall_id,
+                    output_schema={"type": "json", "json_schema": _enrichment_output_schema()},
+                    processor=FINDALL_ENRICH_PROCESSOR,
+                )
+            except httpx.HTTPError as e:
+                task._push({"event": "reasoning",
+                            "text": f"(enrichment request failed: {e}; using what's available)\n"})
 
-            listings: list[dict] = []
-            seen_addresses: set[str] = set()
-            for c in matched_candidates:
-                l = _candidate_to_listing(c, min_beds=task.min_beds)
-                if not l:
+            # The enrich pass runs as its own job phase: findall_status flips
+            # back to "running" and returns to "completed" when the structured
+            # values are filled in. Wait for that signal so we don't parse
+            # half-empty listings — and narrate progress so the (multi-minute)
+            # wait never looks frozen.
+            task._push({"event": "phase", "key": "extract",
+                        "detail": "Extracting price, beds & address…"})
+
+            def _rent_populated(cands: list[dict]) -> int:
+                n = 0
+                for c in cands:
+                    rent = (c.get("output") or {}).get("monthly_rent_usd")
+                    if isinstance(rent, dict) and str(rent.get("value") or "").strip():
+                        n += 1
+                return n
+
+            await asyncio.sleep(5)  # let the enrich job flip status to running
+            candidates: list[dict] = []
+            prev_ready = -1
+            for _ in range(40):  # up to ~3.5 min
+                await asyncio.sleep(5)
+                task._push({"event": "ping", "ts": datetime.now(timezone.utc).isoformat()})
+                try:
+                    st = await client.findall_status(findall_id)
+                except httpx.HTTPError:
                     continue
-                # De-dupe within this search only (no persistent store).
-                norm = _normalize_address(l.get("address") or "")
+                st_obj = st.get("status")
+                estate = st_obj.get("status") if isinstance(st_obj, dict) else (st_obj or "")
+                try:
+                    res = await client.findall_result(findall_id)
+                    candidates = [c for c in (res.get("candidates") or [])
+                                  if c.get("match_status") == "matched"]
+                except httpx.HTTPError:
+                    pass
+
+                ready = _rent_populated(candidates)
+                total = len(candidates) or FINDALL_MATCH_LIMIT
+                if ready != prev_ready:
+                    task._push({"event": "reasoning",
+                                "text": f"Extracting details… {ready}/{total} ready\n"})
+                    task._push({"event": "phase", "key": "extract",
+                                "detail": f"Extracting details — {ready}/{total} ready"})
+                    prev_ready = ready
+
+                if estate == "completed":
+                    break
+
+            # 3) Parse, geocode, score, and stream each listing.
+            task._push({"event": "phase", "key": "finalize",
+                        "detail": "Mapping & scoring listings…"})
+            task._push({"event": "reasoning", "text": "\nMapping & scoring…\n"})
+            seen_addresses: set[str] = set()
+            sent = 0
+            for c in candidates:
+                listing = _candidate_to_listing(c, min_beds=task.min_beds)
+                if not listing:
+                    continue
+                norm = _normalize_address(listing.get("address") or "")
                 if norm and len(norm) > 3:
                     if norm in seen_addresses:
                         continue
                     seen_addresses.add(norm)
-                listings.append(l)
 
-            if listings:
-                task._push({"event": "reasoning",
-                            "text": f"Spam-scoring {len([l for l in listings if l['source'] not in _TRUSTED_SOURCES])} untrusted-source listings…\n"})
-                await score_listings_concurrently(client, listings, concurrency=5)
-
-            sent = 0
-            for l in listings:
-                l["id"] = str(uuid.uuid4())
-
-                # Geocode live so the map has coordinates this session. The
-                # free geocoder self-throttles to ~1/sec, so run it off the
-                # event loop and let results stream in progressively.
-                addr = l.get("address")
+                listing["id"] = str(uuid.uuid4())
+                addr = listing.get("address")
                 if addr:
+                    # Geocode off the event loop (free geocoder ~1/sec).
                     coords = await asyncio.to_thread(geocode_address, addr, city)
                     if coords:
-                        l["lat"], l["lng"] = coords
-
-                l["score"] = _score_listing(l, task.budget)
+                        listing["lat"], listing["lng"] = coords
+                listing["score"] = _score_listing(listing, task.budget)
                 sent += 1
 
-                price_str = f"${l['price']:,}/mo" if l.get("price") else "—"
-                addr_str = l.get("address") or "—"
-                bd = f"{l['bedrooms']}bd" if l.get("bedrooms") else "?bd"
-                spam = f" · spam:{l['spam_score']}" if l.get("spam_score", 0) > 0 else ""
+                price_str = f"${listing['price']:,}/mo" if listing.get("price") else "—"
+                bd = f"{listing['bedrooms']}bd" if listing.get("bedrooms") is not None else "?bd"
                 task._push({"event": "reasoning",
-                            "text": f"  + {addr_str} — {bd} — {price_str}{spam}\n"})
-                task._push({"event": "listing", "listing": l})
+                            "text": f"  + {addr or '—'} — {bd} — {price_str}\n"})
+                task._push({"event": "listing", "listing": listing})
 
             task._push({"event": "reasoning", "text": f"\nDone. {sent} listings found.\n"})
+            task._push({"event": "phase", "key": "done",
+                        "detail": f"{sent} listing{'s' if sent != 1 else ''} found"})
             task.status = TaskStatus.DONE
             task._push({"event": "status", "status": "done"})
 

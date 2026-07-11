@@ -19,6 +19,7 @@ interface ListingCardProps {
   city: string
   stale: boolean
   saved: boolean
+  fraudChecking?: boolean
   onToggleSave: () => void
   isHovered?: boolean
   onHover?: () => void
@@ -26,7 +27,7 @@ interface ListingCardProps {
 }
 
 export function ListingCard({
-  l, idx, city, stale, saved, onToggleSave, isHovered, onHover, onLeave,
+  l, idx, city, stale, saved, fraudChecking, onToggleSave, isHovered, onHover, onLeave,
 }: ListingCardProps) {
   const searchFallback = `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
   const href = safeUrl(l.url, searchFallback)
@@ -39,11 +40,16 @@ export function ListingCard({
       className="group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5"
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        // Per-side borders (not the `border` shorthand): the left edge is a
+        // thicker score-colored accent, and React warns when a shorthand and
+        // a longhand for the same property are mixed in one style object.
+        borderTop: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderRight: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderBottom: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderLeft: `3px solid ${scoreP.border}`,
         boxShadow: isHovered
           ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
           : `0 1px 2px rgba(15,17,21,0.04)`,
-        borderLeft: `3px solid ${scoreP.border}`,
       }}
     >
       <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -82,6 +88,34 @@ export function ListingCard({
           >
             stale?
           </span>
+        )}
+        {l.needs_verification && fraudChecking && (
+          <span
+            className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em] animate-pulse"
+            style={{ backgroundColor: Z.bgSubtle, color: Z.textFaint, border: `1px solid ${Z.border}` }}
+            title="Fraud check in progress — Task API is verifying scam signals against the page."
+          >
+            checking…
+          </span>
+        )}
+        {l.spam_flags != null && (
+          (l.spam_score ?? 0) > 0 ? (
+            <span
+              className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+              style={{ backgroundColor: Z.redSoft, color: Z.red, border: `1px solid #F4B5B5` }}
+              title={`Fraud check flags: ${l.spam_flags.join(", ")}`}
+            >
+              ⚠ fraud: {l.spam_score}
+            </span>
+          ) : (
+            <span
+              className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded tracking-[0.08em]"
+              style={{ backgroundColor: Z.greenSoft, color: Z.green, border: `1px solid #BAE0C2` }}
+              title="Fraud check passed — no scam signals found by the Task API."
+            >
+              ✓ fraud: clear
+            </span>
+          )
         )}
         <button
           type="button"

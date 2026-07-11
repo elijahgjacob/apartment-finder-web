@@ -14,19 +14,24 @@ interface ListingGridProps {
   onHover: (id: string) => void
   onLeave: () => void
   streaming: boolean
+  fraudChecking?: boolean
   hiddenLowScoreCount: number
   hiddenStaleCount: number
+  hiddenSpamCount: number
   showAllScores: boolean
   showStale: boolean
+  showSpam: boolean
   onToggleScores: () => void
   onToggleStale: () => void
+  onToggleSpam: () => void
 }
 
 export function ListingGrid({
   listings, city, isStale, isSaved, onToggleSave,
-  hoveredId, onHover, onLeave, streaming,
-  hiddenLowScoreCount, hiddenStaleCount,
-  showAllScores, showStale, onToggleScores, onToggleStale,
+  hoveredId, onHover, onLeave, streaming, fraudChecking,
+  hiddenLowScoreCount, hiddenStaleCount, hiddenSpamCount,
+  showAllScores, showStale, showSpam,
+  onToggleScores, onToggleStale, onToggleSpam,
 }: ListingGridProps) {
   return (
     <div className="space-y-4">
@@ -49,6 +54,7 @@ export function ListingGrid({
           key={l.id} l={l} idx={i} city={city}
           stale={isStale(l)}
           saved={isSaved(l)}
+          fraudChecking={fraudChecking}
           onToggleSave={() => onToggleSave(l)}
           isHovered={hoveredId === l.id}
           onHover={() => onHover(l.id)}
@@ -66,8 +72,35 @@ export function ListingGrid({
           showStale={showStale}
           onToggle={onToggleStale}
         />
+        <SpamToggle
+          hiddenCount={hiddenSpamCount}
+          showSpam={showSpam}
+          onToggle={onToggleSpam}
+        />
       </div>
     </div>
+  )
+}
+
+function SpamToggle({ hiddenCount, showSpam, onToggle }: { hiddenCount: number; showSpam: boolean; onToggle: () => void }) {
+  if (hiddenCount === 0 && !showSpam) return null
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex-1 py-3 rounded-xl text-sm transition-colors hover:bg-white"
+      style={{
+        backgroundColor: Z.bgCard,
+        border: `1px dashed #F4B5B5`,
+        color: Z.textMid,
+      }}
+      title="Flagged by the Task API secondary check: fact-based scam signals (off-platform payment, owner abroad, withheld address, no viewings, unusual incentives)."
+    >
+      {showSpam
+        ? <>← <span className="font-semibold">Re-hide likely-scam listings</span></>
+        : <>Show <strong style={{ color: Z.red }}>{hiddenCount}</strong> flagged as likely {hiddenCount === 1 ? "scam" : "scams"} →</>
+      }
+    </button>
   )
 }
 

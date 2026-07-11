@@ -62,8 +62,11 @@ def _parse_rent_floors(raw: str) -> dict[int, int]:
             continue
     return out
 
+# Typical monthly-rent floors by bedroom count for the default city (SF).
+# Drives the auto-budget when a query omits one, and the price-fit score.
+# Override via RENT_FLOORS env for a cheaper/pricier market.
 RENT_FLOORS = _parse_rent_floors(os.environ.get(
-    "RENT_FLOORS", "0:800,1:1000,2:1200,3:1500,4:2000,5:2500",
+    "RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000",
 ))
 
 AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
@@ -74,6 +77,11 @@ AGGREGATOR_SOURCES = [s.strip() for s in os.environ.get(
 STALE_AGGREGATOR_DAYS = int(os.environ.get("STALE_AGGREGATOR_DAYS", "14"))
 STALE_DIRECT_DAYS = int(os.environ.get("STALE_DIRECT_DAYS", "45"))
 
-TASK_SPAM_PROCESSOR = os.environ.get("TASK_SPAM_PROCESSOR", "pro")
-
-FINDALL_GENERATOR = os.environ.get("FINDALL_GENERATOR", "pro")
+# "base" is dramatically faster than "pro" (~1 min vs 5+ min) and plenty
+# accurate for an interactive search. Override with FINDALL_GENERATOR=pro
+# for exhaustive runs.
+FINDALL_GENERATOR = os.environ.get("FINDALL_GENERATOR", "base")
+FINDALL_MATCH_LIMIT = int(os.environ.get("FINDALL_MATCH_LIMIT", "8"))
+# Processor for the structured-enrichment pass that fills in price, beds,
+# address, etc. after discovery.
+FINDALL_ENRICH_PROCESSOR = os.environ.get("FINDALL_ENRICH_PROCESSOR", "base")
