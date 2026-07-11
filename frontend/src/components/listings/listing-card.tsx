@@ -40,11 +40,16 @@ export function ListingCard({
       className="group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5"
       style={{
         backgroundColor: Z.bgCard,
-        border: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        // Per-side borders (not the `border` shorthand): the left edge is a
+        // thicker score-colored accent, and React warns when a shorthand and
+        // a longhand for the same property are mixed in one style object.
+        borderTop: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderRight: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderBottom: `1px solid ${saved || isHovered ? Z.blueBorder : Z.border}`,
+        borderLeft: `3px solid ${scoreP.border}`,
         boxShadow: isHovered
           ? `0 8px 24px rgba(31,69,252,0.12), 0 0 0 1px ${Z.blueBorder}`
           : `0 1px 2px rgba(15,17,21,0.04)`,
-        borderLeft: `3px solid ${scoreP.border}`,
       }}
     >
       <div className="flex items-center gap-2 mb-2 flex-wrap">
