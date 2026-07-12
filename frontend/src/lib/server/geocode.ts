@@ -36,6 +36,18 @@ async function queryNominatim(q: string): Promise<{ lat: number; lng: number } |
   }
 }
 
+// Neighborhood-centroid fallback for when the street address won't resolve.
+// Callers must apply the same ~1/s sequencing as geocodeAddress.
+export async function geocodeNeighborhood(
+  neighborhood: string,
+  city?: string | null,
+): Promise<{ lat: number; lng: number } | null> {
+  const targetCity = city?.trim() || CITY
+  const n = neighborhood.trim()
+  if (n.length < 3) return null
+  return queryNominatim(`${n}, ${targetCity}`)
+}
+
 export async function geocodeAddress(
   rawAddress: string,
   city?: string | null,

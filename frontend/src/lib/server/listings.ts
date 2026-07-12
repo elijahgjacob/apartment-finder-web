@@ -127,6 +127,7 @@ export interface ParsedListing {
   sqft: number | null
   lat: number | null
   lng: number | null
+  geo_precision: "address" | "neighborhood" | null
   source: string
   url: string | null
   has_parking: boolean
@@ -275,6 +276,7 @@ export function candidateToListing(candidate: Candidate, minBeds: number | null)
     sqft,
     lat: null,
     lng: null,
+    geo_precision: null,
     source: detectSource(url),
     url,
     has_parking: hasParking ?? false,
@@ -301,7 +303,11 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 // Equal-weight 3-factor score (recency + price fit + proximity), max 100.
 // Every result is freshly discovered, so recency is always full.
 export function scoreListing(
-  l: { price: number | null; bedrooms: number | null; lat: number | null; lng: number | null },
+  l: {
+    price: number | null; bedrooms: number | null
+    lat: number | null; lng: number | null
+    geo_precision?: "address" | "neighborhood" | null
+  },
   budget: number,
 ): number {
   let score = 33
@@ -321,12 +327,17 @@ export function scoreListing(
     score += pricePts
   }
 
+  // Proximity, up to 33. A failed geocode is not evidence the unit is far
+  // away, so unknown location earns a neutral 12 instead of 0 (otherwise the
+  // listing caps at 66 and falls below the strong-fit bar on geocoder luck).
+  // Neighborhood-centroid coords are approximate, so their tiers are
+  // discounted 25%.
   if (l.lat != null && l.lng != null) {
     const km = haversineKm(l.lat, l.lng, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG)
-    if (km < 1.0) score += 33
-    else if (km < 2.5) score += 24
-    else if (km < 5.0) score += 16
-    else score += 9
+    const full = km < 1.0 ? 33 : km < 2.5 ? 24 : km < 5.0 ? 16 : 9
+    score += l.geo_precision === "neighborhood" ? Math.round(full * 0.75) : full
+  } else {
+    score += 12
   }
 
   return Math.min(score, 100)
