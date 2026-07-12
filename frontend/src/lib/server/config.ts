@@ -37,9 +37,9 @@ export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,apartments.
 export const GEO_COUNTRY = envStr("GEO_COUNTRY", "us")
 
 export const APP_TITLE = envStr("APP_TITLE", "Apartment Finder")
-export const BRAND_NAME = envStr("BRAND_NAME", "Parallel")
+export const BRAND_NAME = envStr("BRAND_NAME", "Apartment Finder")
 export const BRAND_TAGLINE = envStr("BRAND_TAGLINE", "AI Apartment Search")
-export const BRAND_LOGO_URL = envStr("BRAND_LOGO_URL", "/parallel-logo.svg")
+export const BRAND_LOGO_URL = envStr("BRAND_LOGO_URL", "/app-logo.svg")
 export const BRAND_DISCLAIMER = envStr(
   "BRAND_DISCLAIMER", "Powered by Parallel Web Systems · parallel.ai",
 )
