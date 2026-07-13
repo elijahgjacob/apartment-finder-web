@@ -3,6 +3,11 @@
 // proximity scoring, rent floors drive auto-budgets and price plausibility,
 // and neighborhood centroids resolve locally instead of via Nominatim
 // (~1s per lookup). Pure data — safe to import from client and server code.
+//
+// rentFloors = entry-level ("starts around") monthly rent per bedroom count,
+// calibrated to mid-2026 Bay Area asking rents (Zumper / Zillow / apartments.com,
+// July 2026 — after the ~22% YoY AI-boom spike). Studio and 4-5BR are
+// interpolated where listing data is thin (studio ≈ 0.78×1BR, +N BR ≈ ×1.2).
 
 export type LatLng = { lat: number; lng: number }
 
@@ -37,7 +42,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.7749, lng: -122.4194 },
     zoom: 13,
     referencePoint: { name: "Caltrain · 4th & King", lat: 37.7764, lng: -122.3973 },
-    rentFloors: { 0: 1900, 1: 2700, 2: 3600, 3: 5200, 4: 6500, 5: 8000 },
+    rentFloors: { 0: 2500, 1: 3400, 2: 4600, 3: 6200, 4: 7800, 5: 9500 },
     neighborhoods: [
       { name: "Mission", lat: 37.7599, lng: -122.4148 },
       { name: "SoMa", lat: 37.7785, lng: -122.4056 },
@@ -85,7 +90,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.8044, lng: -122.2712 },
     zoom: 13,
     referencePoint: { name: "19th St BART", lat: 37.808, lng: -122.2687 },
-    rentFloors: { 0: 1500, 1: 2100, 2: 2800, 3: 3800, 4: 4800, 5: 5800 },
+    rentFloors: { 0: 1700, 1: 2200, 2: 2800, 3: 3600, 4: 4500, 5: 5400 },
     neighborhoods: [
       { name: "Temescal", lat: 37.834, lng: -122.262 },
       { name: "Rockridge", lat: 37.8443, lng: -122.2519 },
@@ -111,7 +116,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.8715, lng: -122.273 },
     zoom: 14,
     referencePoint: { name: "Downtown Berkeley BART", lat: 37.8701, lng: -122.2681 },
-    rentFloors: { 0: 1600, 1: 2200, 2: 2900, 3: 4000, 4: 5000, 5: 6000 },
+    rentFloors: { 0: 1900, 1: 2300, 2: 2900, 3: 3600, 4: 4300, 5: 5200 },
     neighborhoods: [
       { name: "Downtown", lat: 37.87, lng: -122.27 },
       { name: "Southside", lat: 37.866, lng: -122.258 },
@@ -131,7 +136,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.3382, lng: -121.8863 },
     zoom: 12,
     referencePoint: { name: "Diridon Station", lat: 37.3297, lng: -121.9026 },
-    rentFloors: { 0: 1800, 1: 2400, 2: 3000, 3: 4000, 4: 5000, 5: 6000 },
+    rentFloors: { 0: 2100, 1: 2600, 2: 3300, 3: 4300, 4: 5300, 5: 6300 },
     neighborhoods: [
       { name: "Downtown", lat: 37.335, lng: -121.89 },
       { name: "Japantown", lat: 37.348, lng: -121.894 },
@@ -153,7 +158,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.4419, lng: -122.143 },
     zoom: 13,
     referencePoint: { name: "Palo Alto Caltrain", lat: 37.4433, lng: -122.165 },
-    rentFloors: { 0: 2200, 1: 2900, 2: 3800, 3: 5500, 4: 7000, 5: 8500 },
+    rentFloors: { 0: 2600, 1: 3300, 2: 4300, 3: 5800, 4: 7200, 5: 8800 },
     neighborhoods: [
       { name: "Downtown", lat: 37.445, lng: -122.161 },
       { name: "Midtown", lat: 37.433, lng: -122.129 },
@@ -171,7 +176,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.3861, lng: -122.0839 },
     zoom: 13,
     referencePoint: { name: "Mountain View Caltrain", lat: 37.3945, lng: -122.076 },
-    rentFloors: { 0: 2100, 1: 2800, 2: 3600, 3: 4900, 4: 6000, 5: 7000 },
+    rentFloors: { 0: 2500, 1: 3100, 2: 3900, 3: 5100, 4: 6200, 5: 7200 },
     neighborhoods: [
       { name: "Downtown", lat: 37.394, lng: -122.079 },
       { name: "Old Mountain View", lat: 37.39, lng: -122.082 },
@@ -189,7 +194,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.3688, lng: -122.0363 },
     zoom: 13,
     referencePoint: { name: "Sunnyvale Caltrain", lat: 37.3784, lng: -122.0312 },
-    rentFloors: { 0: 2000, 1: 2700, 2: 3400, 3: 4600, 4: 5600, 5: 6500 },
+    rentFloors: { 0: 2400, 1: 3000, 2: 3700, 3: 4800, 4: 5800, 5: 6800 },
     neighborhoods: [
       { name: "Downtown", lat: 37.377, lng: -122.03 },
       { name: "Cherry Chase", lat: 37.355, lng: -122.045 },
@@ -206,7 +211,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.4852, lng: -122.2364 },
     zoom: 13,
     referencePoint: { name: "Redwood City Caltrain", lat: 37.4857, lng: -122.2317 },
-    rentFloors: { 0: 1900, 1: 2600, 2: 3300, 3: 4500, 4: 5500, 5: 6500 },
+    rentFloors: { 0: 2300, 1: 2900, 2: 3600, 3: 4700, 4: 5700, 5: 6700 },
     neighborhoods: [
       { name: "Downtown", lat: 37.486, lng: -122.231 },
       { name: "Centennial", lat: 37.489, lng: -122.24 },
@@ -223,7 +228,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.6879, lng: -122.4702 },
     zoom: 13,
     referencePoint: { name: "Daly City BART", lat: 37.7063, lng: -122.4692 },
-    rentFloors: { 0: 1600, 1: 2200, 2: 2900, 3: 3800, 4: 4600, 5: 5400 },
+    rentFloors: { 0: 1900, 1: 2500, 2: 3200, 3: 4100, 4: 4900, 5: 5700 },
     neighborhoods: [
       { name: "Westlake", lat: 37.701, lng: -122.485 },
       { name: "Serramonte", lat: 37.671, lng: -122.472 },
@@ -239,7 +244,7 @@ export const BAY_AREA_CITIES: BayAreaCity[] = [
     center: { lat: 37.5485, lng: -121.9886 },
     zoom: 12,
     referencePoint: { name: "Fremont BART", lat: 37.5574, lng: -121.9766 },
-    rentFloors: { 0: 1700, 1: 2300, 2: 2900, 3: 3800, 4: 4700, 5: 5500 },
+    rentFloors: { 0: 2000, 1: 2600, 2: 3300, 3: 4200, 4: 5000, 5: 5800 },
     neighborhoods: [
       { name: "Centerville", lat: 37.554, lng: -122.001 },
       { name: "Niles", lat: 37.577, lng: -121.981 },
