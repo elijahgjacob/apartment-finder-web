@@ -1,17 +1,20 @@
 "use client"
 
 import { Z } from "@/lib/palette"
-import { safeUrl } from "@/lib/utils"
+import { isDeepLink, safeUrl } from "@/lib/utils"
 import type { Listing } from "@/types"
 
 export function Citations({ listing }: { listing: Listing }) {
-  if (!listing.citations?.length) return null
+  // Only cite pages we can link to directly — a bare-domain citation would
+  // send the user to a homepage, not the source it came from.
+  const cites = listing.citations?.filter((c) => isDeepLink(c.url)) ?? []
+  if (!cites.length) return null
   return (
     <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-x-3 gap-y-1" style={{ borderColor: Z.borderSoft }}>
       <span className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: Z.textFaint }}>
         Sources
       </span>
-      {listing.citations.map((c, i) => {
+      {cites.map((c, i) => {
         let host = c.url
         try { host = new URL(c.url).hostname.replace(/^www\./, "") } catch { /* keep */ }
         return (
