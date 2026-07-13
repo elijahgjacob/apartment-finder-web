@@ -103,7 +103,7 @@ export function useSearch() {
   const startSearch = useCallback(async (
     q: string,
     budget: number,
-    opts: { city?: string; requirements?: string; neighborhoods?: string[] } = {},
+    opts: { city?: string; requirements?: string; neighborhoods?: string[]; sources?: string[] } = {},
   ) => {
     if (!q.trim()) return
     const gen = ++genRef.current
@@ -130,6 +130,7 @@ export function useSearch() {
       if (opts.city) body.city = opts.city
       if (opts.requirements) body.requirements = opts.requirements
       if (opts.neighborhoods?.length) body.neighborhoods = opts.neighborhoods
+      if (opts.sources?.length) body.sources = opts.sources
       const created = await fetchJson<{ runId: string; objective: string; minBeds: number | null }>(
         api("/api/search"),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
@@ -142,8 +143,14 @@ export function useSearch() {
       if (minBeds) say(` · ${minBeds}+ beds`)
       say(`\n\nStarting entity discovery…\nRun: ${runId}\nSearching and verifying candidates…\n\n`)
 
+      // City and sources ride along on every poll/finalize call so the
+      // stateless server can score with the right anchor and enforce the
+      // source allowlist on streamed candidates too.
+      const cityParam = opts.city ? `&city=${encodeURIComponent(opts.city)}` : ""
+      const sourcesParam = opts.sources?.length
+        ? `&sources=${encodeURIComponent(opts.sources.join(","))}` : ""
       const pollUrl = api(
-        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}`,
+        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${sourcesParam}`,
       )
 
       // 2) Drive the run: discover → enrich → extract → finalize.
@@ -236,9 +243,8 @@ export function useSearch() {
         // 3) Finalize: geocode + score everything in one server call.
         setPhase({ key: "finalize", detail: "Mapping & scoring listings…" })
         say("\nMapping & scoring…\n")
-        const cityParam = opts.city ? `&city=${encodeURIComponent(opts.city)}` : ""
         const fin = await fetchJson<{ listings: Listing[] }>(
-          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`),
+          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${sourcesParam}`),
         )
         if (!live()) return
 

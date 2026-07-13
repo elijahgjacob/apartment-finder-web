@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { findallResult } from "@/lib/server/parallel"
-import { parseCandidates, scoreListing } from "@/lib/server/listings"
+import { parseCandidates, parseOptionsFrom, scoreListing } from "@/lib/server/listings"
 import { geocodeAddress, geocodeNeighborhood } from "@/lib/server/geocode"
+import { neighborhoodCentroid } from "@/lib/bay-area"
 import { DEFAULT_BUDGET } from "@/lib/server/config"
 import { TRUSTED_SOURCES } from "@/lib/server/verify"
 
@@ -27,11 +28,13 @@ export async function GET(
 
   try {
     const candidates = await findallResult(id)
-    const listings = parseCandidates(candidates, minBeds, budget)
+    const opts = parseOptionsFrom(sp)
+    const listings = parseCandidates(candidates, minBeds, budget, opts)
 
-    // Geocode with a precision ladder: exact address, then neighborhood
-    // centroid (memoized per run — several listings often share one), then
-    // give up and let scoring treat the location as unknown-neutral.
+    // Geocode with a precision ladder: exact address via Nominatim, then the
+    // preloaded Bay Area neighborhood-centroid table (free), then Nominatim
+    // for neighborhoods the table doesn't know (memoized per run), then give
+    // up and let scoring treat the location as unknown-neutral.
     const nominatimPause = () => new Promise((r) => setTimeout(r, 1050))
     const hoodCache = new Map<string, { lat: number; lng: number } | null>()
     // Slow geocodes (Nominatim timeouts) must not blow the route's
@@ -40,17 +43,17 @@ export async function GET(
     const deadline = Date.now() + 45_000
     for (const l of listings) {
       let coords: { lat: number; lng: number } | null = null
-      if (Date.now() > deadline) {
-        l.score = scoreListing(l, budget)
-        continue
-      }
-      if (l.address) {
+      const localCentroid = neighborhoodCentroid(city, l.neighborhood)
+      if (l.address && Date.now() < deadline) {
         coords = await geocodeAddress(l.address, city)
         await nominatimPause()
       }
       if (coords) {
         l.geo_precision = "address"
-      } else if (l.neighborhood) {
+      } else if (localCentroid) {
+        coords = localCentroid
+        l.geo_precision = "neighborhood"
+      } else if (l.neighborhood && Date.now() < deadline) {
         const key = l.neighborhood.toLowerCase().trim()
         if (!hoodCache.has(key)) {
           hoodCache.set(key, await geocodeNeighborhood(l.neighborhood, city))
@@ -63,7 +66,7 @@ export async function GET(
         l.lat = coords.lat
         l.lng = coords.lng
       }
-      l.score = scoreListing(l, budget) // re-score with geo precision known
+      l.score = scoreListing(l, budget, opts) // re-score with geo precision known
     }
 
     // Flag untrusted-source listings for the client-driven Task API

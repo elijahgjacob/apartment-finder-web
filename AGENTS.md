@@ -1,7 +1,9 @@
 # Agent Instructions — Apartment Finder Web
 
-This is an apartment discovery application powered by the Parallel API,
-deployed on Vercel as a **single Next.js app**.
+This is a Bay Area apartment discovery application powered by the Parallel
+API, deployed on Vercel as a **single Next.js app**. City choices,
+neighborhood centroids, and per-city rent floors are preloaded in
+`frontend/src/lib/bay-area.ts`.
 
 ## Stack
 

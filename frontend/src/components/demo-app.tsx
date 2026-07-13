@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo, useRef } from "react"
+import { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import dynamic from "next/dynamic"
 import { useConfigState } from "@/providers/config-provider"
 import { useSearch } from "@/hooks/use-search"
@@ -15,6 +15,8 @@ import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
 import { Z, FONT_HEADING, FONT_BODY } from "@/lib/palette"
 import { extractNeighborhoodsFromQuery } from "@/lib/neighborhoods"
+import { cityByName } from "@/lib/bay-area"
+import { useSources } from "@/hooks/use-sources"
 import type { AppConfig, Listing, ViewMode } from "@/types"
 
 const ApartmentMap = dynamic(
@@ -128,9 +130,9 @@ export default function DemoApp() {
   if (configError) {
     return (
       <CenteredScreen
-        title="Backend unreachable"
+        title="Config unavailable"
         color={Z.red}
-        body={`Couldn't load /api/config — ${configError}. Make sure the FastAPI backend is running and reachable from this origin.`}
+        body={`Couldn't load the app configuration: ${configError}.`}
       />
     )
   }
@@ -156,13 +158,36 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   } = useSearch()
 
   const { saved, isSaved, toggleSave, clearSaved } = useSavedTargets()
+  const sources = useSources()
+
+  // Warm the Leaflet map chunk while the user is idle so toggling to the map
+  // view doesn't pay the dynamic-import cost.
+  useEffect(() => {
+    const warm = () => { void import("@/components/map/apartment-map") }
+    if ("requestIdleCallback" in window) {
+      const id = window.requestIdleCallback(warm)
+      return () => window.cancelIdleCallback(id)
+    }
+    const t = setTimeout(warm, 2500)
+    return () => clearTimeout(t)
+  }, [])
+
+  const bayCity = useMemo(() => cityByName(city), [city])
+  const cityFloors = bayCity?.rentFloors ?? config.rentFloors
+  // Center the map (and its reference-point marker) on the selected city.
+  const mapConfig = useMemo(
+    () => bayCity
+      ? { ...config, mapCenter: bayCity.center, mapZoom: bayCity.zoom, referencePoint: bayCity.referencePoint }
+      : config,
+    [bayCity, config],
+  )
 
   const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
   const parsedNeighborhoods = useMemo(() => extractNeighborhoodsFromQuery(query, city), [query, city])
   const effectiveBudget = useMemo(
-    () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, config.rentFloors, config.defaultBudget),
-    [parsedBudget, parsedBeds, config.rentFloors, config.defaultBudget],
+    () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, cityFloors, config.defaultBudget),
+    [parsedBudget, parsedBeds, cityFloors, config.defaultBudget],
   )
 
   const isStale = useMemo(() => makeIsStale(config.staleness), [config.staleness])
@@ -177,9 +202,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
     e.preventDefault()
     setView("list")
     startSearch(query, effectiveBudget, {
-      city,
+      city: bayCity?.full ?? city,
       requirements: requirements || undefined,
       neighborhoods: parsedNeighborhoods.length ? parsedNeighborhoods : undefined,
+      sources: sources.activeSources ?? undefined,
     })
   }
 
@@ -235,7 +261,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const showingSaved = view === "saved"
   const visibleListings = showingSaved ? savedSorted : filteredListings
 
-  const floor = useMemo(() => realisticFloor(parsedBeds, config.rentFloors), [parsedBeds, config.rentFloors])
+  const floor = useMemo(() => realisticFloor(parsedBeds, cityFloors), [parsedBeds, cityFloors])
   const budgetLikelyTooLow = floor != null && parsedBudget != null && parsedBudget < floor
 
   const hasActivity = streaming || !!reasoning || listings.length > 0 || saved.length > 0
@@ -273,10 +299,11 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               lineHeight: 1.05,
             }}
           >
-            Find your home in your own words.
+            Find your Bay Area home in your own words.
           </h1>
           <p className="text-base sm:text-lg mb-7 max-w-2xl leading-relaxed" style={{ color: Z.textMid }}>
-            Describe what you want like you&apos;d tell a friend. The assistant searches the web,
+            Describe what you want like you&apos;d tell a friend. The assistant searches the web
+            across San Francisco, the East Bay, and the Peninsula,
             verifies every match against your criteria, and returns each result with cited sources —
             no guessing, no hallucinated listings.
           </p>
@@ -288,6 +315,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             onCityChange={setCity}
             requirements={requirements}
             onRequirementsChange={setRequirements}
+            sources={sources}
             onSubmit={onSubmit}
             streaming={streaming}
           />
@@ -301,12 +329,13 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               // during this event (state hasn't re-rendered yet).
               const beds = extractBedsFromQuery(s)
               const budget = extractBudgetFromQuery(s)
-                ?? defaultBudgetForBeds(beds, config.rentFloors, config.defaultBudget)
+                ?? defaultBudgetForBeds(beds, cityFloors, config.defaultBudget)
               const hoods = extractNeighborhoodsFromQuery(s, city)
               startSearch(s, budget, {
-                city,
+                city: bayCity?.full ?? city,
                 requirements: requirements || undefined,
                 neighborhoods: hoods.length ? hoods : undefined,
+                sources: sources.activeSources ?? undefined,
               })
             }}
             parsedBeds={parsedBeds}
@@ -455,7 +484,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             {view === "map" && (
               <ApartmentMap
                 listings={visibleListings}
-                config={config ?? null}
+                config={mapConfig}
                 hoveredId={hoveredId}
                 onMarkerClick={handleMarkerClick}
                 height={680}
