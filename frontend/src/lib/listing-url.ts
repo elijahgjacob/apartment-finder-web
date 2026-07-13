@@ -20,8 +20,9 @@ export const SEARCH_PAGE_PATTERNS: RegExp[] = [
   /-for-rent\/?(?:[?#]|$)/i,             // …/apartments-for-rent (Redfin/HotPads)
   /\/(?:city|zipcode|neighborhood|county|state)\/\d/i, // Redfin geo indexes
   /\/apartments-for-rent\/[a-z-]+\/?$/i, // Zumper geo search: /apartments-for-rent/san-francisco-ca
-  // Price-band category pages, e.g. apartmentfinder /San-Francisco-Apartments/Under-3000
-  /\/(?:under|over)-\$?\d{3,}(?:[/?#]|$)/i,
+  // Price-band category pages: apartmentfinder /…/Under-3000 (slash) and
+  // hotpads /…/apartments-under-3000 (hyphen) — accept either separator.
+  /[/-](?:under|over)-\$?\d{3,}(?:[/?#]|$)/i,
   /-apartments\/?$/i,                    // "…-Apartments" area list page
   /-apartments\/(?:under|over|cheap|luxury|pet|furnished|studio|\d)/i, // "…-Apartments/<filter>"
   /apartments-\d+-bedrooms?/i,           // zillow-style /…/apartments-2-bedrooms

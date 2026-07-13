@@ -72,8 +72,18 @@ export const AGGREGATOR_SOURCES = envStr(
 export const STALE_AGGREGATOR_DAYS = envNum("STALE_AGGREGATOR_DAYS", 14)
 export const STALE_DIRECT_DAYS = envNum("STALE_DIRECT_DAYS", 45)
 
-// "base" is dramatically faster than "pro" (~1 min vs 5+) and plenty accurate
-// for an interactive search.
+// Latency vs. recall balance for an interactive search. Measured: enrichment
+// dominates wall-clock — each per-listing Task is slow (core ~100s/listing,
+// pro/ultra far worse), so the search must NOT block on enriching every match.
+// - Discovery: fast "base" generator (finding candidate URLs is easy).
+// - Enrichment: "core". Measured tradeoff — "base" is no faster to first
+//   result but extracts poorly, so blank price/beds listings get filtered and
+//   recall collapses; "core" reads pages reliably so the results we surface are
+//   usable. pro/ultra are far slower for no recall gain here. The client caps
+//   how long it waits on enrichment (see use-search) and finalizes with what's
+//   ready, so core's slower tail doesn't stall the search.
+// - match_limit kept small so discovery finishes fast and the enrichment pool
+//   is bounded.
 export const FINDALL_GENERATOR = envStr("FINDALL_GENERATOR", "base")
-export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 8)
-export const FINDALL_ENRICH_PROCESSOR = envStr("FINDALL_ENRICH_PROCESSOR", "base")
+export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 6)
+export const FINDALL_ENRICH_PROCESSOR = envStr("FINDALL_ENRICH_PROCESSOR", "core")
