@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og"
 import { MARK_DATA_URI } from "./og-mark"
 
 export const runtime = "edge"
-export const alt = "Apartment Finder — AI apartment search with cited sources"
+export const alt = "Bay Area Apartment Finder: AI apartment search with cited sources"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -29,7 +29,7 @@ export default function OpenGraphImage() {
               Apartment Finder
             </div>
             <div style={{ fontSize: 32, color: "#5e574a", marginTop: 10 }}>
-              Find your home in your own words.
+              Find your Bay Area home in your own words.
             </div>
           </div>
         </div>

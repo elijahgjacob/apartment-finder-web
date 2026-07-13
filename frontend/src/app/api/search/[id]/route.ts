@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { findallResult, findallStatus } from "@/lib/server/parallel"
-import { parseCandidates } from "@/lib/server/listings"
+import { parseCandidates, parseOptionsFrom } from "@/lib/server/listings"
 import { DEFAULT_BUDGET } from "@/lib/server/config"
 
 // One short poll: run state + metrics + the listings parsed so far.
@@ -23,7 +23,7 @@ export async function GET(
       findallStatus(id),
       findallResult(id).catch(() => []),
     ])
-    const listings = parseCandidates(candidates, minBeds, budget)
+    const listings = parseCandidates(candidates, minBeds, budget, parseOptionsFrom(sp))
     // How many candidates have enriched rent values — lets the client tell
     // "discovery done" apart from "enrichment done" (both report completed).
     const rentPopulated = candidates.filter((c) => {

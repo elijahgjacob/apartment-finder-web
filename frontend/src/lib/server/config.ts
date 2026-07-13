@@ -36,7 +36,7 @@ export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,apartments.
 
 export const GEO_COUNTRY = envStr("GEO_COUNTRY", "us")
 
-export const APP_TITLE = envStr("APP_TITLE", "Apartment Finder")
+export const APP_TITLE = envStr("APP_TITLE", "Bay Area Apartment Finder")
 export const BRAND_NAME = envStr("BRAND_NAME", "Apartment Finder")
 export const BRAND_TAGLINE = envStr("BRAND_TAGLINE", "AI Apartment Search")
 export const BRAND_LOGO_URL = envStr("BRAND_LOGO_URL", "/app-logo.svg")
@@ -46,16 +46,16 @@ export const BRAND_DISCLAIMER = envStr(
 
 export const SUGGESTIONS = envStr(
   "SEARCH_SUGGESTIONS",
-  "3-bedroom near transit, available within a month|" +
-  "Pet-friendly studio, available soon, under $2500|" +
-  "2BR with in-unit laundry and parking|" +
+  "2BR in the Mission under $3,500|" +
+  "Pet-friendly studio near BART, under $2,500|" +
+  "3-bedroom with parking, available within a month|" +
   "Furnished 1BR, dog-friendly, short-term lease",
 ).split("|").map((s) => s.trim()).filter(Boolean)
 
 // Typical monthly-rent floors by bedroom count for the default city (SF).
 // Drives the auto-budget when a query omits one, and the price-fit score.
-export const RENT_FLOORS: Record<number, number> = (() => {
-  const out: Record<number, number> = {}
+export const RENT_FLOORS: Record<string, number> = (() => {
+  const out: Record<string, number> = {}
   for (const pair of envStr("RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000").split(",")) {
     const [k, v] = pair.split(":")
     const kn = parseInt(k?.trim() ?? "", 10)

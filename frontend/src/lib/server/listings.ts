@@ -5,6 +5,7 @@ import {
   BLOCKED_DOMAINS, LISTING_SITES, RENT_FLOORS,
   REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
 } from "./config"
+import { cityByName } from "@/lib/bay-area"
 import type { Candidate } from "./parallel"
 
 const NA_VALUES = new Set(["", "N/A", "NA", "null", "None", "unknown", "Unknown", "-"])
@@ -85,10 +86,30 @@ function isBlockedUrl(url: string): boolean {
 // Lower bound for price-plausibility checks: 55% of the typical rent for
 // that bedroom count (permissive enough for BMR units, strict enough to
 // catch street-number miscues). $400 floor when beds are unknown.
-function absoluteMinPrice(beds: number | null): number {
+function absoluteMinPrice(beds: number | null, floors: Record<string, number> = RENT_FLOORS): number {
   if (beds == null) return 400
-  const typical = RENT_FLOORS[beds] ?? RENT_FLOORS[Math.min(beds, 5)] ?? 800
+  const typical = floors[beds] ?? floors[Math.min(beds, 5)] ?? 800
   return Math.floor(typical * 0.55)
+}
+
+// Options threaded from the API routes: a source allowlist when the user
+// restricted sources, and per-city rent floors / proximity anchor from the
+// Bay Area table (defaults are the env-configured SF values).
+export interface ParseOptions {
+  allowedDomains?: string[]
+  floors?: Record<string, number>
+  refLat?: number
+  refLng?: number
+}
+
+function matchesDomain(url: string, domains: string[]): boolean {
+  let host: string
+  try {
+    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "")
+  } catch {
+    return false
+  }
+  return domains.some((d) => host === d || host.endsWith(`.${d}`))
 }
 
 const SEARCH_PAGE_PATTERNS = [
@@ -103,6 +124,14 @@ const SEARCH_PAGE_PATTERNS = [
   /\/search[/?#]/i,
   /[?&](?:query|q|search|searchQueryState)=/i,
   /#search/i,
+  // Category / geo-index list pages on the major aggregators that survived
+  // the checks above (individual listings carry a street address or numeric
+  // id, so these markers never appear in a real listing path):
+  /\/for_rent\//i,                       // Trulia/Zillow: /for_rent/San_Francisco,CA
+  /\/for_sale\//i,
+  /-for-rent\/?(?:[?#]|$)/i,             // Redfin/HotPads: …/apartments-for-rent
+  /\/(?:city|zipcode|neighborhood|county|state)\/\d/i, // Redfin geo indexes
+  /\/apartments-for-rent\/[a-z-]+\/?$/i, // Zumper geo search: /apartments-for-rent/san-francisco-ca
 ]
 
 const JUNK_ADDRESS_PATTERNS = [
@@ -141,13 +170,18 @@ export interface ParsedListing {
   score: number
 }
 
-export function candidateToListing(candidate: Candidate, minBeds: number | null): Omit<ParsedListing, "score"> | null {
+export function candidateToListing(
+  candidate: Candidate,
+  minBeds: number | null,
+  opts: ParseOptions = {},
+): Omit<ParsedListing, "score"> | null {
   const name = candidate.name ?? ""
   const url = candidate.url ?? ""
   const description = candidate.description ?? ""
   const output = candidate.output ?? {}
 
   if (!url || isBlockedUrl(url)) return null
+  if (opts.allowedDomains?.length && !matchesDomain(url, opts.allowedDomains)) return null
   if (SEARCH_PAGE_PATTERNS.some((p) => p.test(url))) return null
 
   const address = outputVal(output, "street_address") || addressFromName(name) || name
@@ -179,7 +213,7 @@ export function candidateToListing(candidate: Candidate, minBeds: number | null)
 
   if (price != null && (price < 500 || price > 50000)) price = null
   if (beds != null && (beds < 0 || beds > 10)) beds = null
-  if (price != null && price < absoluteMinPrice(beds)) return null
+  if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
 
   // Street-number miscue guard: reject if the "price" appears in the address.
   if (price != null) {
@@ -309,12 +343,14 @@ export function scoreListing(
     geo_precision?: "address" | "neighborhood" | null
   },
   budget: number,
+  opts: ParseOptions = {},
 ): number {
   let score = 33
+  const floors = opts.floors ?? RENT_FLOORS
 
   if (l.price) {
     const typical = l.bedrooms != null
-      ? RENT_FLOORS[l.bedrooms] ?? RENT_FLOORS[Math.min(l.bedrooms, 5)]
+      ? floors[l.bedrooms] ?? floors[Math.min(l.bedrooms, 5)]
       : undefined
     const ratio = budget ? l.price / budget : 1.0
     let pricePts: number
@@ -333,7 +369,10 @@ export function scoreListing(
   // Neighborhood-centroid coords are approximate, so their tiers are
   // discounted 25%.
   if (l.lat != null && l.lng != null) {
-    const km = haversineKm(l.lat, l.lng, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG)
+    const km = haversineKm(
+      l.lat, l.lng,
+      opts.refLat ?? REFERENCE_POINT_LAT, opts.refLng ?? REFERENCE_POINT_LNG,
+    )
     const full = km < 1.0 ? 33 : km < 2.5 ? 24 : km < 5.0 ? 16 : 9
     score += l.geo_precision === "neighborhood" ? Math.round(full * 0.75) : full
   } else {
@@ -343,20 +382,44 @@ export function scoreListing(
   return Math.min(score, 100)
 }
 
-export function parseCandidates(candidates: Candidate[], minBeds: number | null, budget: number): ParsedListing[] {
+export function parseCandidates(
+  candidates: Candidate[],
+  minBeds: number | null,
+  budget: number,
+  opts: ParseOptions = {},
+): ParsedListing[] {
   const seenAddresses = new Set<string>()
   const out: ParsedListing[] = []
   for (const c of candidates) {
-    const l = candidateToListing(c, minBeds)
+    const l = candidateToListing(c, minBeds, opts)
     if (!l) continue
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
       if (seenAddresses.has(norm)) continue
       seenAddresses.add(norm)
     }
-    out.push({ ...l, score: scoreListing(l, budget) })
+    out.push({ ...l, score: scoreListing(l, budget, opts) })
   }
   return out
+}
+
+// Shared by the poll/finalize routes: decode the request's source/city params
+// into ParseOptions (per-city floors + proximity anchor from the Bay Area
+// table; allowlist only when the client restricted sources).
+export function parseOptionsFrom(sp: URLSearchParams): ParseOptions {
+  const opts: ParseOptions = {}
+  const sources = sp.get("sources")
+  if (sources) {
+    const domains = sources.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).slice(0, 20)
+    if (domains.length) opts.allowedDomains = domains
+  }
+  const city = cityByName(sp.get("city"))
+  if (city) {
+    opts.floors = city.rentFloors
+    opts.refLat = city.referencePoint.lat
+    opts.refLng = city.referencePoint.lng
+  }
+  return opts
 }
 
 export function extractMinBeds(query: string): number | null {

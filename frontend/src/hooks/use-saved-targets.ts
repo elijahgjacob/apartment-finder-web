@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import type { Listing } from "@/types"
 
 const STORAGE_KEY = "apartment-finder-saved-targets"
@@ -31,7 +31,14 @@ function loadSaved(): Listing[] {
  * only persistence: the backend stays fully stateless.
  */
 export function useSavedTargets() {
-  const [saved, setSaved] = useState<Listing[]>(loadSaved)
+  const [saved, setSaved] = useState<Listing[]>([])
+
+  // The page is server-rendered, so reading localStorage during the first
+  // render would mismatch the server HTML — hydrate after mount instead.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot localStorage hydration, not a cascading sync
+    setSaved(loadSaved())
+  }, [])
 
   const write = useCallback((next: Listing[]) => {
     setSaved(next)
