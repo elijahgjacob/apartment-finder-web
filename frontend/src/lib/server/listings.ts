@@ -124,6 +124,14 @@ const SEARCH_PAGE_PATTERNS = [
   /\/search[/?#]/i,
   /[?&](?:query|q|search|searchQueryState)=/i,
   /#search/i,
+  // Category / geo-index list pages on the major aggregators that survived
+  // the checks above (individual listings carry a street address or numeric
+  // id, so these markers never appear in a real listing path):
+  /\/for_rent\//i,                       // Trulia/Zillow: /for_rent/San_Francisco,CA
+  /\/for_sale\//i,
+  /-for-rent\/?(?:[?#]|$)/i,             // Redfin/HotPads: …/apartments-for-rent
+  /\/(?:city|zipcode|neighborhood|county|state)\/\d/i, // Redfin geo indexes
+  /\/apartments-for-rent\/[a-z-]+\/?$/i, // Zumper geo search: /apartments-for-rent/san-francisco-ca
 ]
 
 const JUNK_ADDRESS_PATTERNS = [
