@@ -205,7 +205,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
       city: bayCity?.full ?? city,
       requirements: requirements || undefined,
       neighborhoods: parsedNeighborhoods.length ? parsedNeighborhoods : undefined,
-      sources: sources.activeSources ?? undefined,
+      sources: sources.hasIncludes ? sources.includeSources : undefined,
     })
   }
 
@@ -335,7 +335,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                 city: bayCity?.full ?? city,
                 requirements: requirements || undefined,
                 neighborhoods: hoods.length ? hoods : undefined,
-                sources: sources.activeSources ?? undefined,
+                sources: sources.hasIncludes ? sources.includeSources : undefined,
               })
             }}
             parsedBeds={parsedBeds}

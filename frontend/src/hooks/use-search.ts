@@ -143,14 +143,12 @@ export function useSearch() {
       if (minBeds) say(` · ${minBeds}+ beds`)
       say(`\n\nStarting entity discovery…\nRun: ${runId}\nSearching and verifying candidates…\n\n`)
 
-      // City and sources ride along on every poll/finalize call so the
-      // stateless server can score with the right anchor and enforce the
-      // source allowlist on streamed candidates too.
+      // City rides along on every poll/finalize call so the stateless server
+      // can score with the right per-city floors and proximity anchor.
+      // (Sources are an include hint applied only at create time.)
       const cityParam = opts.city ? `&city=${encodeURIComponent(opts.city)}` : ""
-      const sourcesParam = opts.sources?.length
-        ? `&sources=${encodeURIComponent(opts.sources.join(","))}` : ""
       const pollUrl = api(
-        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${sourcesParam}`,
+        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`,
       )
 
       // 2) Drive the run: discover → enrich → extract → finalize.
@@ -244,7 +242,7 @@ export function useSearch() {
         setPhase({ key: "finalize", detail: "Mapping & scoring listings…" })
         say("\nMapping & scoring…\n")
         const fin = await fetchJson<{ listings: Listing[] }>(
-          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${sourcesParam}`),
+          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`),
         )
         if (!live()) return
 
