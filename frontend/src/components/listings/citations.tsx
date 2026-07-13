@@ -1,13 +1,14 @@
 "use client"
 
 import { Z } from "@/lib/palette"
-import { isDeepLink, safeUrl } from "@/lib/utils"
+import { safeUrl } from "@/lib/utils"
+import { isIndividualListingUrl } from "@/lib/listing-url"
 import type { Listing } from "@/types"
 
 export function Citations({ listing }: { listing: Listing }) {
-  // Only cite pages we can link to directly — a bare-domain citation would
-  // send the user to a homepage, not the source it came from.
-  const cites = listing.citations?.filter((c) => isDeepLink(c.url)) ?? []
+  // Only cite pages we can link to directly — skip bare domains and
+  // search/category pages so a source click always lands on a real listing.
+  const cites = listing.citations?.filter((c) => isIndividualListingUrl(c.url)) ?? []
   if (!cites.length) return null
   return (
     <div className="mt-3 pt-3 border-t flex flex-wrap items-center gap-x-3 gap-y-1" style={{ borderColor: Z.borderSoft }}>

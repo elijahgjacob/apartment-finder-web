@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { isIndividualListingUrl } from "./listing-url"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -21,33 +22,19 @@ export function safeUrl(url: string | null | undefined, fallback = "#"): string 
 }
 
 /**
- * A safe http(s) link that points at a specific page — not a bare domain /
- * homepage. "Deep" means an absolute URL with a real path or query.
- */
-export function isDeepLink(url: string | null | undefined): boolean {
-  if (!url) return false
-  try {
-    const u = new URL(url) // absolute only
-    if (u.protocol !== "http:" && u.protocol !== "https:") return false
-    return u.pathname.replace(/\/+$/, "").length > 0 || u.search.length > 0
-  } catch {
-    return false
-  }
-}
-
-/**
- * Pick the outbound link for a listing. Always resolve to the specific source
- * page, never a top-level domain / homepage: prefer the listing URL, then the
- * first deep citation (the page the data was pulled from), and only fall back
- * (e.g. to an address search) when no real source page exists.
+ * Pick the outbound link for a listing. Always resolve to a specific listing
+ * page — never a top-level domain / homepage, and never a search/category
+ * index: prefer the listing URL, then the first citation that is itself an
+ * individual listing page, and only fall back (e.g. to an address search)
+ * when no real listing page exists.
  */
 export function pickSourceUrl(
   url: string | null | undefined,
   citations: { url: string }[] | null | undefined,
   fallback = "#",
 ): string {
-  if (isDeepLink(url)) return url as string
-  const cite = citations?.find((c) => isDeepLink(c.url))
+  if (isIndividualListingUrl(url)) return url as string
+  const cite = citations?.find((c) => isIndividualListingUrl(c.url))
   return cite ? cite.url : fallback
 }
 

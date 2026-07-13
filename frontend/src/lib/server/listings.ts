@@ -6,6 +6,7 @@ import {
   REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
 } from "./config"
 import { cityByName } from "@/lib/bay-area"
+import { isSearchOrCategoryUrl } from "@/lib/listing-url"
 import type { Candidate } from "./parallel"
 
 const NA_VALUES = new Set(["", "N/A", "NA", "null", "None", "unknown", "Unknown", "-"])
@@ -93,36 +94,31 @@ function absoluteMinPrice(beds: number | null, floors: Record<string, number> = 
 }
 
 // Options threaded from the API routes: per-city rent floors / proximity
-// anchor from the Bay Area table (defaults are the env-configured SF values).
+// anchor from the Bay Area table (defaults are the env-configured SF values),
+// plus the bedroom ceiling parsed from the query (studio → 0).
 // Note: user-selected sources are search *includes*, not a filter — they
 // steer discovery via the FindAll objective and never reject results here.
 export interface ParseOptions {
   floors?: Record<string, number>
   refLat?: number
   refLng?: number
+  maxBeds?: number | null
 }
 
-const SEARCH_PAGE_PATTERNS = [
-  /\/apartments\/$/i,
-  /\/apartments-\d+-bedrooms\/$/i,
-  /\/apartments-under-\d+\/$/i,
-  /\/\d+-bedroom-apartments/i,
-  /\/rentals$/i,
-  /\/apartments\/[a-z-]+(?:\/|$)/i,
-  // Search-results pages, not individual listings (e.g. craigslist
-  // /search/apa?query=..., generic ?q=/query= result URLs).
-  /\/search[/?#]/i,
-  /[?&](?:query|q|search|searchQueryState)=/i,
-  /#search/i,
-  // Category / geo-index list pages on the major aggregators that survived
-  // the checks above (individual listings carry a street address or numeric
-  // id, so these markers never appear in a real listing path):
-  /\/for_rent\//i,                       // Trulia/Zillow: /for_rent/San_Francisco,CA
-  /\/for_sale\//i,
-  /-for-rent\/?(?:[?#]|$)/i,             // Redfin/HotPads: …/apartments-for-rent
-  /\/(?:city|zipcode|neighborhood|county|state)\/\d/i, // Redfin geo indexes
-  /\/apartments-for-rent\/[a-z-]+\/?$/i, // Zumper geo search: /apartments-for-rent/san-francisco-ca
-]
+// A wide rent range in the extracted evidence ("$1,255 - $2,980") is the
+// signature of a multi-unit building or category page, not a single unit.
+// Lease-term variance on one unit stays narrow, so only flag ratios ≥ 1.4.
+export function hasWideRentRange(strings: (string | null | undefined)[]): boolean {
+  for (const s of strings) {
+    if (!s) continue
+    const m = s.match(/\$?\s*(\d[\d,]{2,})\s*(?:-|–|—|to)\s*\$?\s*(\d[\d,]{2,})/)
+    if (!m) continue
+    const lo = parseInt(m[1].replace(/,/g, ""), 10)
+    const hi = parseInt(m[2].replace(/,/g, ""), 10)
+    if (lo > 0 && hi > lo && hi / lo >= 1.4) return true
+  }
+  return false
+}
 
 const JUNK_ADDRESS_PATTERNS = [
   /^[A-Z][a-z]+,?\s+[A-Z]{2}$/,
@@ -171,7 +167,14 @@ export function candidateToListing(
   const output = candidate.output ?? {}
 
   if (!url || isBlockedUrl(url)) return null
-  if (SEARCH_PAGE_PATTERNS.some((p) => p.test(url))) return null
+  if (isSearchOrCategoryUrl(url)) return null
+
+  // Multi-unit building / category page: the rent evidence spans a wide range
+  // rather than naming one unit's price. Reject so these don't pose as a unit.
+  const matchConditionValues = Object.values(output)
+    .filter((o) => o?.type === "match_condition")
+    .map((o) => String(o?.value ?? ""))
+  if (hasWideRentRange([outputVal(output, "monthly_rent_usd"), ...matchConditionValues])) return null
 
   const address = outputVal(output, "street_address") || addressFromName(name) || name
   if (!address || address.length < 5) return null
@@ -202,7 +205,16 @@ export function candidateToListing(
 
   if (price != null && (price < 500 || price > 50000)) price = null
   if (beds != null && (beds < 0 || beds > 10)) beds = null
+
+  // A real individual listing states at least its rent or its bedroom count.
+  // Neither → it's a building/category/POI index page, not a unit; reject.
+  if (price == null && beds == null) return null
+
   if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
+
+  // Bedroom ceiling from the query (e.g. a studio search shouldn't surface a
+  // 2BR). Unknown bedroom counts pass — we only reject a known over-count.
+  if (opts.maxBeds != null && beds != null && beds > opts.maxBeds) return null
 
   // Street-number miscue guard: reject if the "price" appears in the address.
   if (price != null) {
@@ -382,6 +394,9 @@ export function parseCandidates(
   for (const c of candidates) {
     const l = candidateToListing(c, minBeds, opts)
     if (!l) continue
+    // Over-budget guard: a known price well above the budget (>20%) is not a
+    // useful result for that search. Unknown prices pass.
+    if (budget && l.price != null && l.price > budget * 1.2) continue
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
       if (seenAddresses.has(norm)) continue
@@ -403,10 +418,24 @@ export function parseOptionsFrom(sp: URLSearchParams): ParseOptions {
     opts.refLat = city.referencePoint.lat
     opts.refLng = city.referencePoint.lng
   }
+  const maxBedsRaw = sp.get("maxBeds")
+  if (maxBedsRaw != null && maxBedsRaw !== "") {
+    const n = Number(maxBedsRaw)
+    if (Number.isFinite(n)) opts.maxBeds = n
+  }
   return opts
 }
 
-export function extractMinBeds(query: string): number | null {
+// Bedroom intent parsed from a free-text query. A studio search has an exact
+// ceiling of 0; "2 bedroom" is a floor of 2 with no ceiling (2+ is fine).
+export function bedroomBounds(query: string): { min: number | null; max: number | null } {
+  if (/\bstudios?\b/i.test(query) && !/\d\s*(?:br|bed|bedroom)/i.test(query)) {
+    return { min: 0, max: 0 }
+  }
   const m = query.match(/(\d+)\s*(?:br|bed|bedroom)/i)
-  return m ? parseInt(m[1], 10) : null
+  return m ? { min: parseInt(m[1], 10), max: null } : { min: null, max: null }
+}
+
+export function extractMinBeds(query: string): number | null {
+  return bedroomBounds(query).min
 }

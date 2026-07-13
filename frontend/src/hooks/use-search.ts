@@ -131,12 +131,12 @@ export function useSearch() {
       if (opts.requirements) body.requirements = opts.requirements
       if (opts.neighborhoods?.length) body.neighborhoods = opts.neighborhoods
       if (opts.sources?.length) body.sources = opts.sources
-      const created = await fetchJson<{ runId: string; objective: string; minBeds: number | null }>(
+      const created = await fetchJson<{ runId: string; objective: string; minBeds: number | null; maxBeds: number | null }>(
         api("/api/search"),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       )
       if (!live()) return
-      const { runId, objective, minBeds } = created
+      const { runId, objective, minBeds, maxBeds } = created
 
       say(`Objective: ${objective}\n`)
       say(`Budget: $${budget.toLocaleString()}/mo`)
@@ -147,8 +147,9 @@ export function useSearch() {
       // can score with the right per-city floors and proximity anchor.
       // (Sources are an include hint applied only at create time.)
       const cityParam = opts.city ? `&city=${encodeURIComponent(opts.city)}` : ""
+      const maxBedsParam = maxBeds != null ? `&maxBeds=${maxBeds}` : ""
       const pollUrl = api(
-        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`,
+        `/api/search/${runId}?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${maxBedsParam}`,
       )
 
       // 2) Drive the run: discover → enrich → extract → finalize.
@@ -242,7 +243,7 @@ export function useSearch() {
         setPhase({ key: "finalize", detail: "Mapping & scoring listings…" })
         say("\nMapping & scoring…\n")
         const fin = await fetchJson<{ listings: Listing[] }>(
-          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}`),
+          api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${maxBedsParam}`),
         )
         if (!live()) return
 
