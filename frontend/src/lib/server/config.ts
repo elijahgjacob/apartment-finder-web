@@ -21,7 +21,7 @@ export const MAP_CENTER_LAT = envNum("MAP_CENTER_LAT", REFERENCE_POINT_LAT)
 export const MAP_CENTER_LNG = envNum("MAP_CENTER_LNG", REFERENCE_POINT_LNG)
 export const MAP_ZOOM = envNum("MAP_ZOOM", 13)
 
-export const DEFAULT_BUDGET = envNum("SEARCH_BUDGET", 5000)
+export const DEFAULT_BUDGET = envNum("SEARCH_BUDGET", 6000)
 export const DEFAULT_QUERY = envStr("SEARCH_QUERY", `apartments for rent in ${CITY_SHORT}`)
 
 export const LISTING_SITES = envStr(
@@ -46,8 +46,8 @@ export const BRAND_DISCLAIMER = envStr(
 
 export const SUGGESTIONS = envStr(
   "SEARCH_SUGGESTIONS",
-  "2BR in the Mission under $3,500|" +
-  "Pet-friendly studio near BART, under $2,500|" +
+  "2BR in the Mission under $5,000|" +
+  "Pet-friendly studio near BART, under $3,000|" +
   "3-bedroom with parking, available within a month|" +
   "Furnished 1BR, dog-friendly, short-term lease",
 ).split("|").map((s) => s.trim()).filter(Boolean)
@@ -56,7 +56,7 @@ export const SUGGESTIONS = envStr(
 // Drives the auto-budget when a query omits one, and the price-fit score.
 export const RENT_FLOORS: Record<string, number> = (() => {
   const out: Record<string, number> = {}
-  for (const pair of envStr("RENT_FLOORS", "0:1900,1:2700,2:3600,3:5200,4:6500,5:8000").split(",")) {
+  for (const pair of envStr("RENT_FLOORS", "0:2500,1:3400,2:4600,3:6200,4:7800,5:9500").split(",")) {
     const [k, v] = pair.split(":")
     const kn = parseInt(k?.trim() ?? "", 10)
     const vn = parseInt(v?.trim() ?? "", 10)
