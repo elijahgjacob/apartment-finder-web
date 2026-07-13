@@ -1,7 +1,7 @@
 "use client"
 
 import { Z, FONT_HEADING } from "@/lib/palette"
-import { safeUrl } from "@/lib/utils"
+import { pickSourceUrl } from "@/lib/utils"
 import { MatchPills } from "./match-pills"
 import { Citations } from "./citations"
 import type { Listing } from "@/types"
@@ -30,8 +30,10 @@ interface ListingCardProps {
 export function ListingCard({
   l, idx, city, stale, saved, candidate, fraudChecking, onToggleSave, isHovered, onHover, onLeave,
 }: ListingCardProps) {
+  // Always link to the specific source page, never a bare domain/homepage:
+  // prefer the listing URL, then a deep citation, then an address search.
   const searchFallback = `https://www.google.com/search?q=${encodeURIComponent(`${l.address ?? l.title ?? ""} rent ${city}`)}`
-  const href = safeUrl(l.url, searchFallback)
+  const href = pickSourceUrl(l.url, l.citations, searchFallback)
   const scoreP = scorePalette(l.score)
   return (
     <article
