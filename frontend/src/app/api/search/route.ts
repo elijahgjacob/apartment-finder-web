@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { findallCreate } from "@/lib/server/parallel"
-import { extractMinBeds } from "@/lib/server/listings"
+import { bedroomBounds } from "@/lib/server/listings"
 import { DEFAULT_BUDGET, BLOCKED_DOMAINS } from "@/lib/server/config"
 import { sanitizeDomain } from "@/lib/sources"
 
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const budget = body.budget ?? DEFAULT_BUDGET
-  const minBeds = extractMinBeds(query)
+  const { min: minBeds, max: maxBeds } = bedroomBounds(query)
   // Custom domains get echoed into the FindAll prompt — accept only clean
   // hostnames, drop anything on the block list, cap the count.
   const sources = Array.isArray(body.sources)
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
       sources: sources?.length ? sources : null,
       minBeds,
     })
-    return NextResponse.json({ runId: findallId, objective, minBeds, budget, sources })
+    return NextResponse.json({ runId: findallId, objective, minBeds, maxBeds, budget, sources })
   } catch (e) {
     return NextResponse.json(
       { detail: e instanceof Error ? e.message : "FindAll create failed" }, { status: 502 },
