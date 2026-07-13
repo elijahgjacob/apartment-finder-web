@@ -92,24 +92,14 @@ function absoluteMinPrice(beds: number | null, floors: Record<string, number> = 
   return Math.floor(typical * 0.55)
 }
 
-// Options threaded from the API routes: a source allowlist when the user
-// restricted sources, and per-city rent floors / proximity anchor from the
-// Bay Area table (defaults are the env-configured SF values).
+// Options threaded from the API routes: per-city rent floors / proximity
+// anchor from the Bay Area table (defaults are the env-configured SF values).
+// Note: user-selected sources are search *includes*, not a filter — they
+// steer discovery via the FindAll objective and never reject results here.
 export interface ParseOptions {
-  allowedDomains?: string[]
   floors?: Record<string, number>
   refLat?: number
   refLng?: number
-}
-
-function matchesDomain(url: string, domains: string[]): boolean {
-  let host: string
-  try {
-    host = new URL(url).hostname.toLowerCase().replace(/^www\./, "")
-  } catch {
-    return false
-  }
-  return domains.some((d) => host === d || host.endsWith(`.${d}`))
 }
 
 const SEARCH_PAGE_PATTERNS = [
@@ -181,7 +171,6 @@ export function candidateToListing(
   const output = candidate.output ?? {}
 
   if (!url || isBlockedUrl(url)) return null
-  if (opts.allowedDomains?.length && !matchesDomain(url, opts.allowedDomains)) return null
   if (SEARCH_PAGE_PATTERNS.some((p) => p.test(url))) return null
 
   const address = outputVal(output, "street_address") || addressFromName(name) || name
@@ -403,16 +392,11 @@ export function parseCandidates(
   return out
 }
 
-// Shared by the poll/finalize routes: decode the request's source/city params
-// into ParseOptions (per-city floors + proximity anchor from the Bay Area
-// table; allowlist only when the client restricted sources).
+// Shared by the poll/finalize routes: decode the request's city param into
+// ParseOptions (per-city rent floors + proximity anchor from the Bay Area
+// table). Source selection is a discovery-time include, not a parse filter.
 export function parseOptionsFrom(sp: URLSearchParams): ParseOptions {
   const opts: ParseOptions = {}
-  const sources = sp.get("sources")
-  if (sources) {
-    const domains = sources.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean).slice(0, 20)
-    if (domains.length) opts.allowedDomains = domains
-  }
   const city = cityByName(sp.get("city"))
   if (city) {
     opts.floors = city.rentFloors

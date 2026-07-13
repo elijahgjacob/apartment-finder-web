@@ -31,29 +31,14 @@ async function parallelFetch(path: string, init?: RequestInit, beta = true): Pro
 
 // ── FindAll match conditions ─────────────────────────────────────────────
 
-function matchConditions(
-  minBeds: number | null,
-  budget: number,
-  city: string,
-  allowedDomains?: string[] | null,
-) {
+function matchConditions(minBeds: number | null, budget: number, city: string) {
   let blockedClause = ""
   if (BLOCKED_DOMAINS.length) {
     const listed = BLOCKED_DOMAINS.join(", ")
-    blockedClause = ` Reject any candidate whose URL is on these domains: ${listed}.`
-    // "Prefer direct sites" contradicts a user-picked allowlist — only add it
-    // when the user hasn't restricted sources.
-    if (!allowedDomains?.length) {
-      blockedClause +=
-        ` Prefer the original landlord's, broker's, or property-management website ` +
-        `over those aggregators.`
-    }
-  }
-  let sourceClause = ""
-  if (allowedDomains?.length) {
-    sourceClause =
-      ` Only accept candidates hosted on one of these websites (or their subdomains): ` +
-      `${allowedDomains.join(", ")}. Reject listings from any other website.`
+    blockedClause =
+      ` Reject any candidate whose URL is on these domains: ${listed}. ` +
+      `Prefer the original landlord's, broker's, or property-management website ` +
+      `over those aggregators.`
   }
   return [
     {
@@ -62,10 +47,9 @@ function matchConditions(
         `The page is an individual rental property listing in or near ${city}. ` +
         "It advertises a specific unit available to rent. " +
         "Not a search results page, not a news article, not a category index." +
-        sourceClause +
         blockedClause +
         " If the page describes a real property in the target area " +
-        "(and satisfies the website restrictions above), mark this matched.",
+        "(and is not on a blocked domain), mark this matched.",
     },
     {
       name: "fits_budget",
@@ -239,7 +223,7 @@ export async function findallCreate(opts: {
     objective += `. Prioritize listings in these ${city} neighborhoods: ${opts.neighborhoods.join(", ")}`
   }
   if (opts.sources?.length) {
-    objective += `. Search only these listing websites: ${opts.sources.join(", ")}`
+    objective += `. Search the web broadly, and be sure to include listings from these websites: ${opts.sources.join(", ")}`
   }
   if (opts.requirements) objective += `. Requirements: ${opts.requirements}`
 
@@ -248,7 +232,7 @@ export async function findallCreate(opts: {
     body: JSON.stringify({
       objective,
       entity_type: "apartment rental listings",
-      match_conditions: matchConditions(opts.minBeds ?? null, opts.budget, city, opts.sources),
+      match_conditions: matchConditions(opts.minBeds ?? null, opts.budget, city),
       enrichments: ENRICHMENTS,
       generator: FINDALL_GENERATOR,
       match_limit: FINDALL_MATCH_LIMIT,

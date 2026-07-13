@@ -1,6 +1,7 @@
-// Listing-source configuration shared by the source picker UI and the
-// search API routes. Domains here must stay in sync with what the FindAll
-// match condition and the server-side URL allowlist can enforce.
+// Listing-source configuration shared by the source picker UI and the search
+// API routes. Selected sources are *includes* — sites to make sure the search
+// covers, layered on top of a normal broad web search, not an exclusive
+// allowlist.
 
 export type SourceOption = { domain: string; label: string }
 
@@ -36,10 +37,4 @@ export function sanitizeDomain(input: string): string | null {
   if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)) return null
   if (s.length > 100) return null
   return s
-}
-
-// A selection is a restriction only when it differs from "all majors, no
-// custom domains" — the default means "search everywhere, as before".
-export function isRestricted(selected: string[], custom: string[]): boolean {
-  return custom.length > 0 || selected.length !== ALL_MAJOR_DOMAINS.length
 }

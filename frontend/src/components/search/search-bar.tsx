@@ -31,7 +31,7 @@ export function SearchBar({
   const [customError, setCustomError] = useState(false)
 
   const cityKnown = BAY_AREA_CITIES.some((c) => c.label === city)
-  const sourceCount = sources.activeSources?.length
+  const includeCount = sources.includeSources.length
 
   const submitCustom = () => {
     if (!customInput.trim()) return
@@ -74,13 +74,13 @@ export function SearchBar({
             onClick={() => setShowSources(!showSources)}
             className="text-xs font-bold px-2.5 py-1 rounded-lg transition-colors"
             style={{
-              color: showSources || sources.restricted ? Z.blueDark : Z.textMid,
-              backgroundColor: showSources || sources.restricted ? Z.blueSoft : "transparent",
-              border: `1px solid ${showSources || sources.restricted ? Z.blueBorder : Z.border}`,
+              color: showSources || sources.hasIncludes ? Z.blueDark : Z.textMid,
+              backgroundColor: showSources || sources.hasIncludes ? Z.blueSoft : "transparent",
+              border: `1px solid ${showSources || sources.hasIncludes ? Z.blueBorder : Z.border}`,
               fontFamily: FONT_HEADING,
             }}
           >
-            Sources{sourceCount != null ? ` · ${sourceCount}` : ""}
+            Include sites{includeCount ? ` · ${includeCount}` : ""}
           </button>
           <button
             type="button"
@@ -172,9 +172,9 @@ export function SearchBar({
           <div className="mt-1.5 text-[11px]" style={{ color: Z.textFaint }}>
             {customError
               ? "That doesn't look like a website — try a plain domain like example.com"
-              : sources.restricted
-                ? `Searching ${sources.activeSources!.length} selected ${sources.activeSources!.length === 1 ? "site" : "sites"} only.`
-                : "All sources are searched by default — deselect to narrow, or add your own."}
+              : sources.hasIncludes
+                ? `Searching the whole web and making sure to include ${includeCount} ${includeCount === 1 ? "site" : "sites"}.`
+                : "Searches the whole web. Pick sites to make sure they're included, or add your own."}
           </div>
         </div>
       )}
