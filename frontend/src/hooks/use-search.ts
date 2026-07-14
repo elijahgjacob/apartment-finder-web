@@ -17,11 +17,14 @@ type PollResponse = {
 
 const POLL_MS = 4000
 const MAX_POLLS = 90 // ~6 min hard safety cap
-// Enrichment is the slow phase (a Task per listing). Rather than block until
-// every match is enriched, finalize once at least one listing has its rent
-// populated and this budget has elapsed — trades the slow enrichment tail for
-// a much snappier result. Full completion short-circuits earlier.
-const ENRICH_BUDGET_MS = 100_000
+// Enrichment is the slow phase (a Task per listing) and ripens gradually.
+// We wait for it to COMPLETE before finalizing — finalizing early (at the
+// first ready listing) routinely produced zero results, because that one
+// listing was often filtered and the rest hadn't enriched yet. This is only a
+// last-resort escape hatch so a single hung straggler can't force a timeout:
+// once enrichment has run this long with at least one listing ready, finalize
+// with what we have.
+const ENRICH_MAX_WAIT_MS = 200_000
 const VERIFY_POLL_MS = 5000
 const VERIFY_MAX_POLLS = 24 // ~2 min per listing
 
@@ -237,23 +240,20 @@ export function useSearch() {
           continue
         }
 
-        // Enrichment phase: narrate fill-in progress. Finalize when enrichment
-        // completes, OR once the budget elapses and at least one listing has a
-        // rent (don't wait on slow stragglers — that's the latency killer).
+        // Enrichment phase: narrate fill-in progress; wait for it to complete
+        // so enough listings survive filtering (finalizing at the first ready
+        // listing yielded zero results). The time-based escape hatch only
+        // fires if enrichment drags on with a hung straggler.
         const total = poll.candidateCount || 1
         if (poll.rentPopulated !== prevReady) {
           say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
           setPhase({ key: "extract", detail: `Extracting details — ${poll.rentPopulated}/${total} ready` })
           prevReady = poll.rentPopulated
         }
-        // Finalize as soon as we have a useful handful of enriched listings,
-        // or the budget elapses with at least one — whichever comes first.
-        const enoughReady = poll.rentPopulated >= Math.min(3, total)
-        const budgetElapsed = Date.now() - enrichStartedAt > ENRICH_BUDGET_MS && poll.rentPopulated >= 1
-        const proceed = poll.state === "completed" || enoughReady || budgetElapsed
-        if (!proceed) continue
+        const enrichTimedOut = Date.now() - enrichStartedAt > ENRICH_MAX_WAIT_MS && poll.rentPopulated >= 1
+        if (poll.state !== "completed" && !enrichTimedOut) continue
         if (poll.state !== "completed") {
-          say(`\nShowing ${poll.rentPopulated} ready now — still enriching the rest.\n`)
+          say(`\nEnrichment slow — finalizing ${poll.rentPopulated} ready now.\n`)
         }
 
         // 3) Finalize: geocode + score everything in one server call.
