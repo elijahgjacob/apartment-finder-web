@@ -228,25 +228,35 @@ function DemoAppInner({ config }: { config: AppConfig }) {
     [SPAM_HIDE_THRESHOLD],
   )
 
+  // How many listings clear the strong-fit bar (and aren't hidden as
+  // stale/spam). If none do, we don't want to render an empty page while
+  // weaker-but-real matches sit hidden — so auto-drop the bar in that case.
+  const strongFitCount = useMemo(
+    () => streaming ? 0 : sortedListings.filter((l) => (l.score ?? 0) >= STRONG_FIT_THRESHOLD && (showStale || !isStale(l)) && (showSpam || !isSpam(l))).length,
+    [sortedListings, streaming, showStale, showSpam, isStale, isSpam],
+  )
+  const autoShowAll = !streaming && strongFitCount === 0
+  const effectiveShowAll = showAllScores || autoShowAll
+
   const filteredListings = useMemo(() => {
     return sortedListings.filter((l) => {
       // While a search is streaming, show every verified card in live time —
       // provisional scores lack proximity/price points until finalize, so the
       // strong-fit bar only applies once the run completes.
-      if (!streaming && !showAllScores && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
+      if (!streaming && !effectiveShowAll && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
       if (!showStale && isStale(l)) return false
       if (!showSpam && isSpam(l)) return false
       return true
     })
-  }, [sortedListings, streaming, showAllScores, showStale, showSpam, isStale, isSpam])
+  }, [sortedListings, streaming, effectiveShowAll, showStale, showSpam, isStale, isSpam])
 
   const hiddenLowScoreCount = useMemo(
-    () => streaming ? 0 : sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l)) && (showSpam || !isSpam(l))).length,
-    [sortedListings, streaming, showStale, showSpam, isStale, isSpam],
+    () => (streaming || effectiveShowAll) ? 0 : sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l)) && (showSpam || !isSpam(l))).length,
+    [sortedListings, streaming, effectiveShowAll, showStale, showSpam, isStale, isSpam],
   )
   const hiddenStaleCount = useMemo(
-    () => sortedListings.filter((l) => isStale(l) && (showAllScores || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
-    [sortedListings, showAllScores, isStale],
+    () => sortedListings.filter((l) => isStale(l) && (effectiveShowAll || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
+    [sortedListings, effectiveShowAll, isStale],
   )
   const hiddenSpamCount = useMemo(
     () => sortedListings.filter((l) => isSpam(l)).length,
@@ -470,7 +480,8 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                     hiddenLowScoreCount={hiddenLowScoreCount}
                     hiddenStaleCount={hiddenStaleCount}
                     hiddenSpamCount={hiddenSpamCount}
-                    showAllScores={showAllScores}
+                    showAllScores={effectiveShowAll}
+                    autoShowAll={autoShowAll}
                     showStale={showStale}
                     showSpam={showSpam}
                     onToggleScores={() => setShowAllScores((v) => !v)}
