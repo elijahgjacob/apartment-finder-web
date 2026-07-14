@@ -32,7 +32,7 @@ export const SEARCH_PAGE_PATTERNS: RegExp[] = [
 
 // Aggregator hosts we never link to even if a URL looks listing-shaped —
 // mirrors the server's default BLOCKED_DOMAINS so client link-picking agrees.
-const BLOCKED_LINK_HOSTS = ["zillow.com", "yelp.com"]
+const BLOCKED_LINK_HOSTS = ["zillow.com", "yelp.com", "loopnet.com", "crexi.com"]
 
 export function isSearchOrCategoryUrl(url: string | null | undefined): boolean {
   if (!url) return false

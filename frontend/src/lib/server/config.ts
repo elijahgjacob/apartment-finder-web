@@ -35,9 +35,10 @@ export const LISTING_SITES = envStr(
 // are filtered precisely by URL pattern (lib/listing-url), so we no longer
 // blanket-block whole aggregators. apartments.com in particular has huge,
 // extractable individual-listing inventory — blocking it was silently killing
-// most Bay Area results. zillow (heavy bot-walls → dead outbound links) and
-// yelp (not rental listings) stay blocked.
-export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,yelp.com")
+// most Bay Area results. zillow (heavy bot-walls → dead outbound links),
+// yelp (not rental listings), and loopnet/crexi (commercial real estate, not
+// apartments) stay blocked.
+export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,yelp.com,loopnet.com,crexi.com")
   .split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
 
 export const GEO_COUNTRY = envStr("GEO_COUNTRY", "us")
