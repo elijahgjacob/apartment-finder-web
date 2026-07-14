@@ -19,6 +19,7 @@ interface ListingGridProps {
   hiddenStaleCount: number
   hiddenSpamCount: number
   showAllScores: boolean
+  autoShowAll?: boolean
   showStale: boolean
   showSpam: boolean
   onToggleScores: () => void
@@ -30,11 +31,20 @@ export function ListingGrid({
   listings, city, isStale, isSaved, onToggleSave,
   hoveredId, onHover, onLeave, streaming, fraudChecking,
   hiddenLowScoreCount, hiddenStaleCount, hiddenSpamCount,
-  showAllScores, showStale, showSpam,
+  showAllScores, autoShowAll, showStale, showSpam,
   onToggleScores, onToggleStale, onToggleSpam,
 }: ListingGridProps) {
   return (
     <div className="space-y-4">
+      {autoShowAll && listings.length > 0 && (
+        <div
+          className="rounded-xl px-4 py-2.5 text-[13px]"
+          style={{ backgroundColor: Z.blueSofter, border: `1px solid ${Z.blueBorder}`, color: Z.textMid }}
+        >
+          None of these cleared the strong-fit bar, so we&apos;re showing every
+          match ranked by fit — rather than an empty list.
+        </div>
+      )}
       {listings.length === 0 && streaming && (<><SkeletonCard /><SkeletonCard /><SkeletonCard /></>)}
       {listings.length === 0 && !streaming && (
         <div
@@ -63,11 +73,13 @@ export function ListingGrid({
         />
       ))}
       <div className="flex flex-col sm:flex-row gap-2 mt-2">
-        <HiddenScoresToggle
-          hiddenCount={hiddenLowScoreCount}
-          showAll={showAllScores}
-          onToggle={onToggleScores}
-        />
+        {!autoShowAll && (
+          <HiddenScoresToggle
+            hiddenCount={hiddenLowScoreCount}
+            showAll={showAllScores}
+            onToggle={onToggleScores}
+          />
+        )}
         <StaleToggle
           hiddenCount={hiddenStaleCount}
           showStale={showStale}
