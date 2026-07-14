@@ -103,6 +103,10 @@ export interface ParseOptions {
   refLat?: number
   refLng?: number
   maxBeds?: number | null
+  // Progressive-rendering mode (discovery/poll phase): keep still-unenriched
+  // matches (no price/beds yet) so they can render immediately as "candidates";
+  // the price/bedroom-dependent quality gates are deferred to finalize.
+  lenient?: boolean
 }
 
 // A wide rent range in the extracted evidence ("$1,255 - $2,980") is the
@@ -208,7 +212,8 @@ export function candidateToListing(
 
   // A real individual listing states at least its rent or its bedroom count.
   // Neither → it's a building/category/POI index page, not a unit; reject.
-  if (price == null && beds == null) return null
+  // Deferred while lenient (streaming): a match may not be enriched yet.
+  if (!opts.lenient && price == null && beds == null) return null
 
   if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
 
@@ -226,9 +231,13 @@ export function candidateToListing(
   if (minBeds && beds != null && beds < minBeds) return null
   if (JUNK_ADDRESS_PATTERNS.some((p) => p.test(address.trim()))) return null
 
+  // Address-shape gate: needs a street number or a building-name-ish title.
+  // Deferred while lenient — a still-unenriched match has only its page title,
+  // not a street address yet; the match condition already verified it's an
+  // individual listing and the URL/junk filters still applied above.
   const hasStreetNumber = /\d+\s+\w+/.test(address)
   const isNamedBuilding = /(apartments?|towers?|plaza|square|heights|village|terrace|residences|lofts|place)/i.test(name)
-  if (!hasStreetNumber && !isNamedBuilding) return null
+  if (!opts.lenient && !hasStreetNumber && !isNamedBuilding) return null
 
   const bathrooms = outputFloat(output, "bathrooms")
   const sqftStr = outputVal(output, "square_feet")
@@ -395,8 +404,8 @@ export function parseCandidates(
     const l = candidateToListing(c, minBeds, opts)
     if (!l) continue
     // Over-budget guard: a known price well above the budget (>20%) is not a
-    // useful result for that search. Unknown prices pass.
-    if (budget && l.price != null && l.price > budget * 1.2) continue
+    // useful result. Deferred while lenient (price may not be enriched yet).
+    if (!opts.lenient && budget && l.price != null && l.price > budget * 1.2) continue
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
       if (seenAddresses.has(norm)) continue

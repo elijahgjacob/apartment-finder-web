@@ -23,7 +23,9 @@ export async function GET(
       findallStatus(id),
       findallResult(id).catch(() => []),
     ])
-    const listings = parseCandidates(candidates, minBeds, budget, parseOptionsFrom(sp))
+    // Poll drives progressive rendering: keep unenriched matches (lenient) so
+    // they show as candidates immediately. finalize re-parses strictly.
+    const listings = parseCandidates(candidates, minBeds, budget, { ...parseOptionsFrom(sp), lenient: true })
     // How many candidates have enriched rent values — lets the client tell
     // "discovery done" apart from "enrichment done" (both report completed).
     const rentPopulated = candidates.filter((c) => {
