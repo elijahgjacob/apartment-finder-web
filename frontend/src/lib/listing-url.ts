@@ -26,12 +26,13 @@ export const SEARCH_PAGE_PATTERNS: RegExp[] = [
   /-apartments\/?$/i,                    // "…-Apartments" area list page
   /-apartments\/(?:under|over|cheap|luxury|pet|furnished|studio|\d)/i, // "…-Apartments/<filter>"
   /apartments-\d+-bedrooms?/i,           // zillow-style /…/apartments-2-bedrooms
+  /\/\d+-bedrooms?(?:[/?#]|$)/i,          // apartments.com-style /{geo}/2-bedrooms index
   /\/shopping-centers?\//i,              // POI/directory pages (apartmenthomeliving)
 ]
 
 // Aggregator hosts we never link to even if a URL looks listing-shaped —
 // mirrors the server's default BLOCKED_DOMAINS so client link-picking agrees.
-const BLOCKED_LINK_HOSTS = ["zillow.com", "apartments.com", "yelp.com"]
+const BLOCKED_LINK_HOSTS = ["zillow.com", "yelp.com"]
 
 export function isSearchOrCategoryUrl(url: string | null | undefined): boolean {
   if (!url) return false

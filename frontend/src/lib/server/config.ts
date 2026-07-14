@@ -31,7 +31,13 @@ export const LISTING_SITES = envStr(
   "rentberry.com,showcase.com,compass.com",
 )
 
-export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,apartments.com,yelp.com")
+// Domain-level blocks. Kept deliberately small: category/search index pages
+// are filtered precisely by URL pattern (lib/listing-url), so we no longer
+// blanket-block whole aggregators. apartments.com in particular has huge,
+// extractable individual-listing inventory — blocking it was silently killing
+// most Bay Area results. zillow (heavy bot-walls → dead outbound links) and
+// yelp (not rental listings) stay blocked.
+export const BLOCKED_DOMAINS = envStr("BLOCKED_DOMAINS", "zillow.com,yelp.com")
   .split(",").map((d) => d.trim().toLowerCase()).filter(Boolean)
 
 export const GEO_COUNTRY = envStr("GEO_COUNTRY", "us")

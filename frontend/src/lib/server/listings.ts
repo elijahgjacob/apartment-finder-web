@@ -206,9 +206,10 @@ export function candidateToListing(
   if (price != null && (price < 500 || price > 50000)) price = null
   if (beds != null && (beds < 0 || beds > 10)) beds = null
 
-  // A real individual listing states at least its rent or its bedroom count.
-  // Neither → it's a building/category/POI index page, not a unit; reject.
-  if (price == null && beds == null) return null
+  // We intentionally do NOT reject listings missing an extracted price/beds.
+  // If it's a real, accessible individual listing (it passed the category /
+  // blocked-host / wide-range / address-shape gates), show it with details
+  // blank rather than hide a place the user could actually open.
 
   if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
 
@@ -394,9 +395,10 @@ export function parseCandidates(
   for (const c of candidates) {
     const l = candidateToListing(c, minBeds, opts)
     if (!l) continue
-    // Over-budget guard: a known price well above the budget (>20%) is not a
-    // useful result for that search. Unknown prices pass.
-    if (budget && l.price != null && l.price > budget * 1.2) continue
+    // Budget is a ranking signal, not a hard gate: an accessible listing a bit
+    // over budget is still worth showing (scoring sinks it below the strong
+    // fits). We only surface accessible individual listings, so we don't drop
+    // them for price. (Over-budget still earns 0 price points in scoreListing.)
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
       if (seenAddresses.has(norm)) continue
