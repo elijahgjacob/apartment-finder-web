@@ -28,6 +28,8 @@ export const SEARCH_PAGE_PATTERNS: RegExp[] = [
   /apartments-\d+-bedrooms?/i,           // zillow-style /…/apartments-2-bedrooms
   /\/\d+-bedrooms?(?:[/?#]|$)/i,          // apartments.com-style /{geo}/2-bedrooms index
   /\/shopping-centers?\//i,              // POI/directory pages (apartmenthomeliving)
+  /\/find\//i,                           // forrent.com-style /find/… search paths
+  /(?:less|more|under|over)-than-\$?\d{2,}/i, // price-filter search segments (…/less-than-3000)
 ]
 
 // Aggregator hosts we never link to even if a URL looks listing-shaped —
