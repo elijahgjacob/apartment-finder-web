@@ -212,6 +212,14 @@ export function useSearch() {
         }
         if (!live()) return
 
+        // Terminal failure from the search provider (e.g. FindAll run errored
+        // or was cancelled). Surface it immediately instead of polling until
+        // the timeout — otherwise the UI just spins for minutes.
+        if (poll.state === "failed" || poll.state === "cancelled" || poll.state === "error") {
+          fail("The search service hit an error on this run (it may be rate-limited or over quota). Please try again in a bit.")
+          return
+        }
+
         if (poll.listings.length) mergeIncoming(poll.listings)
 
         if (!enrichStarted) {
