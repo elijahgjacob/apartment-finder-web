@@ -29,7 +29,11 @@ export async function GET(
   try {
     const candidates = await findallResult(id)
     const opts = parseOptionsFrom(sp)
-    const listings = parseCandidates(candidates, minBeds, budget, opts)
+    const drops: Record<string, number> = {}
+    const listings = parseCandidates(candidates, minBeds, budget, opts, drops)
+    // Funnel visibility (shows in Vercel runtime logs): how many matched
+    // candidates became listings, and why the rest were dropped.
+    console.log(`[funnel] run=${id} matched=${candidates.length} kept=${listings.length} drops=${JSON.stringify(drops)}`)
 
     // Geocode with a precision ladder: exact address via Nominatim, then the
     // preloaded Bay Area neighborhood-centroid table (free), then Nominatim

@@ -161,24 +161,31 @@ export interface ParsedListing {
 export function candidateToListing(
   candidate: Candidate,
   opts: ParseOptions = {},
+  drops?: Record<string, number>,
 ): Omit<ParsedListing, "score"> | null {
   const name = candidate.name ?? ""
   const url = candidate.url ?? ""
   const description = candidate.description ?? ""
   const output = candidate.output ?? {}
+  // Record why a candidate is dropped (for the finalize funnel log).
+  const rej = (reason: string): null => {
+    if (drops) drops[reason] = (drops[reason] ?? 0) + 1
+    return null
+  }
 
-  if (!url || isBlockedUrl(url)) return null
-  if (isSearchOrCategoryUrl(url)) return null
+  if (!url) return rej("no_url")
+  if (isBlockedUrl(url)) return rej("blocked_host")
+  if (isSearchOrCategoryUrl(url)) return rej("category_page")
 
   // Multi-unit building / category page: the rent evidence spans a wide range
   // rather than naming one unit's price. Reject so these don't pose as a unit.
   const matchConditionValues = Object.values(output)
     .filter((o) => o?.type === "match_condition")
     .map((o) => String(o?.value ?? ""))
-  if (hasWideRentRange([outputVal(output, "monthly_rent_usd"), ...matchConditionValues])) return null
+  if (hasWideRentRange([outputVal(output, "monthly_rent_usd"), ...matchConditionValues])) return rej("wide_price_range")
 
   const address = outputVal(output, "street_address") || addressFromName(name) || name
-  if (!address || address.length < 5) return null
+  if (!address || address.length < 5) return rej("no_address")
 
   let price = parseIntLoose(outputVal(output, "monthly_rent_usd"))
   if (price == null) {
@@ -212,7 +219,7 @@ export function candidateToListing(
   // blocked-host / wide-range / address-shape gates), show it with details
   // blank rather than hide a place the user could actually open.
 
-  if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
+  if (price != null && price < absoluteMinPrice(beds, opts.floors)) return rej("below_price_floor")
 
   // Bedroom count (min/max from the query) is a RANKING signal, not a hard
   // gate — see scoreListing. Dropping bedroom mismatches outright left studio
@@ -221,15 +228,15 @@ export function candidateToListing(
   // Street-number miscue guard: reject if the "price" appears in the address.
   if (price != null) {
     for (const m of address.matchAll(/\d+/g)) {
-      if (parseInt(m[0], 10) === price) return null
+      if (parseInt(m[0], 10) === price) return rej("price_is_address")
     }
   }
 
-  if (JUNK_ADDRESS_PATTERNS.some((p) => p.test(address.trim()))) return null
+  if (JUNK_ADDRESS_PATTERNS.some((p) => p.test(address.trim()))) return rej("junk_address")
 
   const hasStreetNumber = /\d+\s+\w+/.test(address)
   const isNamedBuilding = /(apartments?|towers?|plaza|square|heights|village|terrace|residences|lofts|place)/i.test(name)
-  if (!hasStreetNumber && !isNamedBuilding) return null
+  if (!hasStreetNumber && !isNamedBuilding) return rej("not_listing_shaped")
 
   const bathrooms = outputFloat(output, "bathrooms")
   const sqftStr = outputVal(output, "square_feet")
@@ -397,6 +404,7 @@ export function parseCandidates(
   minBeds: number | null,
   budget: number,
   opts: ParseOptions = {},
+  drops?: Record<string, number>,
 ): ParsedListing[] {
   // Bedroom min/max feed scoreListing as ranking signals; accept it either
   // positionally (minBeds) or via opts, whichever the caller set.
@@ -404,7 +412,7 @@ export function parseCandidates(
   const seenAddresses = new Set<string>()
   const out: ParsedListing[] = []
   for (const c of candidates) {
-    const l = candidateToListing(c, o)
+    const l = candidateToListing(c, o, drops)
     if (!l) continue
     // Budget and bedroom fit are ranking signals, not hard gates: an
     // accessible listing that's a bit over budget or a nearby size is still
@@ -412,7 +420,10 @@ export function parseCandidates(
     // hidden. We only surface accessible individual listings.
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
-      if (seenAddresses.has(norm)) continue
+      if (seenAddresses.has(norm)) {
+        if (drops) drops.duplicate_address = (drops.duplicate_address ?? 0) + 1
+        continue
+      }
       seenAddresses.add(norm)
     }
     out.push({ ...l, score: scoreListing(l, budget, o) })
