@@ -28,14 +28,36 @@ export function safeUrl(url: string | null | undefined, fallback = "#"): string 
  * individual listing page, and only fall back (e.g. to an address search)
  * when no real listing page exists.
  */
+// How specific a listing URL is: deeper paths and an id-like (numeric) segment
+// mean "an actual unit" vs a shallow geo/browse page (…/mission-san-francisco-ca).
+function urlSpecificity(u: string): number {
+  try {
+    const segs = new URL(u).pathname.split("/").filter(Boolean)
+    return segs.length + (segs.some((s) => /\d/.test(s)) ? 2 : 0)
+  } catch {
+    return 0
+  }
+}
+
 export function pickSourceUrl(
   url: string | null | undefined,
   citations: { url: string }[] | null | undefined,
   fallback = "#",
 ): string {
-  if (isIndividualListingUrl(url)) return url as string
-  const cite = citations?.find((c) => isIndividualListingUrl(c.url))
-  return cite ? cite.url : fallback
+  // Consider the listing URL and every citation; keep only real individual
+  // listing links, then pick the MOST SPECIFIC one. This avoids linking to a
+  // shallow browse/landing page (which passes the "deep" check) when a precise
+  // unit link is available among the citations. Ties keep the earliest (the
+  // listing URL first), so behavior is stable.
+  const candidates = [url, ...(citations ?? []).map((c) => c.url)].filter(isIndividualListingUrl) as string[]
+  if (!candidates.length) return fallback
+  let best = candidates[0]
+  let bestScore = urlSpecificity(best)
+  for (const c of candidates.slice(1)) {
+    const s = urlSpecificity(c)
+    if (s > bestScore) { best = c; bestScore = s }
+  }
+  return best
 }
 
 /** Escape a string for safe interpolation into a raw HTML string. */
