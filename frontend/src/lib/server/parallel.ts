@@ -44,12 +44,14 @@ function matchConditions(minBeds: number | null, budget: number, city: string) {
     {
       name: "is_rental_listing",
       description:
-        `The page is an individual rental property listing in or near ${city}. ` +
-        "It advertises a specific unit available to rent. " +
-        "Not a search results page, not a news article, not a category index." +
-        blockedClause +
-        " If the page describes a real property in the target area " +
-        "(and is not on a blocked domain), mark this matched.",
+        `The page is ONE individual rental unit's listing in or near ${city}, ` +
+        "showing that specific unit's own street address and details. " +
+        "Match ONLY a single-unit listing page. Do NOT match: search-results or " +
+        "filtered pages (by neighborhood, price, or bed count), category/index " +
+        "pages, pages that list multiple different units or a price range, " +
+        "building-overview pages without a specific unit, or news/blog articles. " +
+        "If the page has no specific street address for one unit, do not match." +
+        blockedClause,
     },
     {
       name: "fits_budget",
