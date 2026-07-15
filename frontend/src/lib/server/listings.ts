@@ -95,13 +95,15 @@ function absoluteMinPrice(beds: number | null, floors: Record<string, number> = 
 
 // Options threaded from the API routes: per-city rent floors / proximity
 // anchor from the Bay Area table (defaults are the env-configured SF values),
-// plus the bedroom ceiling parsed from the query (studio → 0).
+// plus the bedroom min/max parsed from the query (studio → max 0). Bedroom
+// bounds and budget are RANKING signals in scoreListing, never hard drops.
 // Note: user-selected sources are search *includes*, not a filter — they
 // steer discovery via the FindAll objective and never reject results here.
 export interface ParseOptions {
   floors?: Record<string, number>
   refLat?: number
   refLng?: number
+  minBeds?: number | null
   maxBeds?: number | null
 }
 
@@ -158,7 +160,6 @@ export interface ParsedListing {
 
 export function candidateToListing(
   candidate: Candidate,
-  minBeds: number | null,
   opts: ParseOptions = {},
 ): Omit<ParsedListing, "score"> | null {
   const name = candidate.name ?? ""
@@ -213,9 +214,9 @@ export function candidateToListing(
 
   if (price != null && price < absoluteMinPrice(beds, opts.floors)) return null
 
-  // Bedroom ceiling from the query (e.g. a studio search shouldn't surface a
-  // 2BR). Unknown bedroom counts pass — we only reject a known over-count.
-  if (opts.maxBeds != null && beds != null && beds > opts.maxBeds) return null
+  // Bedroom count (min/max from the query) is a RANKING signal, not a hard
+  // gate — see scoreListing. Dropping bedroom mismatches outright left studio
+  // searches (etc.) with zero results when only nearby-size units enriched.
 
   // Street-number miscue guard: reject if the "price" appears in the address.
   if (price != null) {
@@ -224,7 +225,6 @@ export function candidateToListing(
     }
   }
 
-  if (minBeds && beds != null && beds < minBeds) return null
   if (JUNK_ADDRESS_PATTERNS.some((p) => p.test(address.trim()))) return null
 
   const hasStreetNumber = /\d+\s+\w+/.test(address)
@@ -381,7 +381,15 @@ export function scoreListing(
     score += 12
   }
 
-  return Math.min(score, 100)
+  // Bedroom fit: a known mismatch vs the requested min/max is demoted (so
+  // exact-size units rank first) but never dropped — a studio search should
+  // still surface nearby 1BRs rather than nothing. ~15 points per bedroom off.
+  if (l.bedrooms != null) {
+    if (opts.minBeds != null && l.bedrooms < opts.minBeds) score -= 15 * (opts.minBeds - l.bedrooms)
+    if (opts.maxBeds != null && l.bedrooms > opts.maxBeds) score -= 15 * (l.bedrooms - opts.maxBeds)
+  }
+
+  return Math.max(0, Math.min(score, 100))
 }
 
 export function parseCandidates(
@@ -390,21 +398,24 @@ export function parseCandidates(
   budget: number,
   opts: ParseOptions = {},
 ): ParsedListing[] {
+  // Bedroom min/max feed scoreListing as ranking signals; accept it either
+  // positionally (minBeds) or via opts, whichever the caller set.
+  const o: ParseOptions = { ...opts, minBeds: opts.minBeds ?? minBeds }
   const seenAddresses = new Set<string>()
   const out: ParsedListing[] = []
   for (const c of candidates) {
-    const l = candidateToListing(c, minBeds, opts)
+    const l = candidateToListing(c, o)
     if (!l) continue
-    // Budget is a ranking signal, not a hard gate: an accessible listing a bit
-    // over budget is still worth showing (scoring sinks it below the strong
-    // fits). We only surface accessible individual listings, so we don't drop
-    // them for price. (Over-budget still earns 0 price points in scoreListing.)
+    // Budget and bedroom fit are ranking signals, not hard gates: an
+    // accessible listing that's a bit over budget or a nearby size is still
+    // worth showing (scoring sinks it below the strong fits) rather than
+    // hidden. We only surface accessible individual listings.
     const norm = normalizeAddress(l.address ?? "")
     if (norm && norm.length > 3) {
       if (seenAddresses.has(norm)) continue
       seenAddresses.add(norm)
     }
-    out.push({ ...l, score: scoreListing(l, budget, opts) })
+    out.push({ ...l, score: scoreListing(l, budget, o) })
   }
   return out
 }
@@ -424,6 +435,11 @@ export function parseOptionsFrom(sp: URLSearchParams): ParseOptions {
   if (maxBedsRaw != null && maxBedsRaw !== "") {
     const n = Number(maxBedsRaw)
     if (Number.isFinite(n)) opts.maxBeds = n
+  }
+  const minBedsRaw = sp.get("minBeds")
+  if (minBedsRaw != null && minBedsRaw !== "") {
+    const n = Number(minBedsRaw)
+    if (Number.isFinite(n)) opts.minBeds = n
   }
   return opts
 }
