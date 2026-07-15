@@ -89,8 +89,10 @@ export const STALE_DIRECT_DAYS = envNum("STALE_DIRECT_DAYS", 45)
 //   usable. pro/ultra are far slower for no recall gain here. The client caps
 //   how long it waits on enrichment (see use-search) and finalizes with what's
 //   ready, so core's slower tail doesn't stall the search.
-// - match_limit kept small so discovery finishes fast and the enrichment pool
-//   is bounded.
+// - match_limit: the accessibility gate drops a large share of "verified"
+//   candidates (Zillow/blocked hosts, category/index pages, dupes), so ~6
+//   matches yielded only ~2 shown. 10 gives more headroom for survivors —
+//   more listings per search — at some added discovery/enrichment time.
 export const FINDALL_GENERATOR = envStr("FINDALL_GENERATOR", "base")
-export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 6)
+export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 10)
 export const FINDALL_ENRICH_PROCESSOR = envStr("FINDALL_ENRICH_PROCESSOR", "core")
