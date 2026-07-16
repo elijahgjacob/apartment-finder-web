@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Z, FONT_HEADING, FONT_BODY } from "@/lib/palette"
+import { Z, FONT_HEADING, FONT_BODY, FONT_MONO } from "@/lib/palette"
 import { BAY_AREA_CITIES } from "@/lib/bay-area"
 import { MAJOR_SOURCES } from "@/lib/sources"
 import type { useSources } from "@/hooks/use-sources"
@@ -220,8 +220,8 @@ export function SearchBar({
         <button
           type="submit"
           disabled={!query.trim() || streaming}
-          className="px-7 py-3 rounded-xl font-bold text-sm text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
-          style={{ backgroundColor: Z.blue, fontFamily: FONT_HEADING, letterSpacing: "0.01em" }}
+          className="px-7 py-3 rounded-[4px] text-[13px] uppercase text-white disabled:opacity-50 transition-all hover:brightness-110 active:scale-[0.98] shrink-0"
+          style={{ backgroundColor: Z.blue, fontFamily: FONT_MONO, fontWeight: 500, letterSpacing: "0.04em" }}
         >
           {streaming ? "Searching…" : "Search"}
         </button>

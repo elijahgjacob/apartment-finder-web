@@ -15,7 +15,7 @@ import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
 import { Z, FONT_HEADING, FONT_BODY } from "@/lib/palette"
 import { extractNeighborhoodsFromQuery } from "@/lib/neighborhoods"
-import { cityByName } from "@/lib/bay-area"
+import { cityByName, cityInQuery } from "@/lib/bay-area"
 import { useSources } from "@/hooks/use-sources"
 import type { AppConfig, Listing, ViewMode } from "@/types"
 
@@ -203,6 +203,19 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
   const parsedNeighborhoods = useMemo(() => extractNeighborhoodsFromQuery(query, city), [query, city])
   const parsedSqft = useMemo(() => extractSqftFromQuery(query), [query])
+
+  // If the query names a Bay Area city (case-insensitive, e.g. "Palo Alto
+  // homes in the bubble"), switch the dropdown to it. Reacts to the query text
+  // only, so a manual city pick sticks until the query changes again.
+  useEffect(() => {
+    const detected = cityInQuery(query)
+    // Deriving the selected city from the query text is the intended effect,
+    // not a cascading-render bug.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (detected && detected.label !== city) setCity(detected.label)
+    // React to query only, so a manual city pick sticks until the query changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
   const effectiveBudget = useMemo(
     () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, cityFloors, config.defaultBudget),
     [parsedBudget, parsedBeds, cityFloors, config.defaultBudget],
@@ -318,7 +331,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             </span>
           </div>
           <h1
-            className="font-bold mb-4 max-w-3xl"
+            className="font-medium mb-4 max-w-3xl"
             style={{
               fontFamily: FONT_HEADING,
               color: Z.text,
@@ -327,12 +340,13 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               lineHeight: 1.05,
             }}
           >
-            Find your Bay Area home in your own words.
+            Find your Bay Area rental in your own words.
           </h1>
           <p className="text-base sm:text-lg mb-7 max-w-2xl leading-relaxed" style={{ color: Z.textMid }}>
             Describe what you want like you&apos;d tell a friend. The assistant searches the web
             across San Francisco, the East Bay, and the Peninsula,
             verifies every match against your criteria, and returns each result with cited sources.
+            No more couch-surfing.
           </p>
 
           <SearchBar
@@ -524,11 +538,11 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
             <FeatureCard
               title="Every apartment links to a real listing"
-              body="Each result opens the actual unit's listing page — a specific street address, not a search page or an invented result you can't rent."
+              body="Each result opens the actual unit's listing page: a specific street address, not a search page or an invented result you can't rent."
             />
             <FeatureCard
               title="Checked against your must-haves"
-              body="Every place is verified one-by-one against what you asked for — beds, budget, pets, parking — and shows which of your requirements it actually meets."
+              body="Every place is verified one-by-one against what you asked for (beds, budget, pets, parking) and shows which of your requirements it actually meets."
             />
             <FeatureCard
               title="Keep watching for new units"
@@ -552,7 +566,7 @@ function FeatureCard({ title, body }: { title: string; body: string }) {
       <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-1.5" style={{ color: Z.blue }}>
         Built-in
       </div>
-      <h3 className="text-base font-bold mb-1" style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
+      <h3 className="text-base font-medium mb-1" style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
         {title}
       </h3>
       <p className="text-sm leading-relaxed" style={{ color: Z.textMid }}>{body}</p>

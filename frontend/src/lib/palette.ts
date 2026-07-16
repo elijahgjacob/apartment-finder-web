@@ -1,31 +1,37 @@
+// Parallel design-system tokens (parallel.ai). Warm off-white base, index
+// black text, signal orange as a sparing accent, neutral grey borders. Key
+// names are kept stable (incl. the legacy `blue*` names) so every consumer
+// picks up the on-brand values without a rename sweep. Per the brand system,
+// interactive text is index black (underline on hover), signal orange is
+// reserved for primary CTAs and selected states, and red is errors only.
 export const Z = {
-  // `blue` is the Parallel brand orange, kept for primary CTAs and fills.
-  // The rest of the family is a true blue: rust-orange links and accents
-  // read as error-red (George's feedback), so interactive/selected states
-  // use blue and red stays reserved for fraud/error semantics.
-  blue: "#fb631b",
-  blueDark: "#1D4ED8",
-  blueDarker: "#1E40AF",
-  blueSoft: "#EFF6FF",
-  blueSofter: "#F8FAFF",
-  blueBorder: "#BFDBFE",
-  text: "#1d1b16",
-  textSoft: "#3a352a",
-  textMid: "#5e574a",
-  textFaint: "#8a8273",
-  bgPage: "#fcfcfa",
-  bgCard: "#ffffff",
-  bgSubtle: "#f4f0e6",
-  border: "#d8d0bf",
-  borderSoft: "#e8e1cf",
+  // Signal orange — primary CTA / one key accent per section. Not a fill color.
+  blue: "#FB631B",
+  // Interactive / link text: index black (the brand's link affordance is an
+  // underline on hover, not a blue). Emphasis uses the same.
+  blueDark: "#1D1B16",
+  blueDarker: "#1D1B16",
+  // Selected / "parsed" chip + soft-CTA fills: orange wash and orange-light.
+  blueSoft: "#FCDDCF",
+  blueSofter: "#FEF3EC",
+  blueBorder: "#F9BC9F",
+  text: "#1D1B16",
+  textSoft: "#3A352A",
+  textMid: "#5C5B59",
+  textFaint: "#858483",
+  bgPage: "#FCFCFA",
+  bgCard: "#FFFFFF",
+  bgSubtle: "#F6F6F6",
+  border: "#E5E5E5",
+  borderSoft: "#EEEEEE",
   green: "#137333",
   greenSoft: "#E6F4EA",
   amber: "#C77700",
   amberSoft: "#FFF4E0",
-  red: "#C62828",
-  redSoft: "#FCE8E8",
+  red: "#E14942",
+  redSoft: "#FDECEA",
 }
 
 export const FONT_HEADING = "'Geist Variable', 'Geist', system-ui, sans-serif"
 export const FONT_BODY = "'Geist Variable', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-export const FONT_MONO = "ui-monospace, 'SF Mono', Menlo, monospace"
+export const FONT_MONO = "'Geist Mono Variable', 'Geist Mono', 'FT System Mono', 'SF Mono', Menlo, monospace"
