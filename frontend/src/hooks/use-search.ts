@@ -25,6 +25,22 @@ const MAX_POLLS = 90 // ~6 min hard safety cap
 // once enrichment has run this long with at least one listing ready, finalize
 // with what we have.
 const ENRICH_MAX_WAIT_MS = 200_000
+// FindAll only reports `completed` once it fills match_limit OR exhausts the
+// web. A rare/over-constrained query (e.g. "3BR penthouse under $2500") may
+// never fill the limit, so it never completes — the client would then poll to
+// MAX_POLLS and show a timeout error, discarding the candidates it DID find.
+// Once discovery has run this long with at least one match, proceed to
+// enrichment with what we have instead of waiting for `completed`.
+const DISCOVER_MAX_WAIT_MS = 120_000
+// For a run that escaped discovery (never `completed`), we can't use the run
+// state to tell that enrichment finished. Instead finalize once enrichment has
+// settled — no newly-populated rent for this long — so we don't sit on the
+// full ENRICH_MAX_WAIT_MS for a small candidate set that's already done.
+const ENRICH_SETTLE_MS = 25_000
+// Discovery is run-to-run variable: a thin neighborhood occasionally returns a
+// junk-heavy candidate set and finalizes near-empty. Rather than give up, run
+// one fresh FindAll pass before showing the user (near-)nothing.
+const LOW_YIELD_RETRY_THRESHOLD = 2
 const VERIFY_POLL_MS = 5000
 const VERIFY_MAX_POLLS = 24 // ~2 min per listing
 
@@ -132,8 +148,12 @@ export function useSearch() {
       setError(msg)
     }
 
-    try {
-      // 1) Create the run.
+    // One full discovery → enrich → finalize pass against a fresh FindAll run.
+    // Returns the finalized listings, or null if the run hard-failed or timed
+    // out (fail() has already surfaced the error). The terminal "done" state is
+    // set by the caller so a thin first pass can be retried transparently.
+    const driveRun = async (attempt: number): Promise<{ listings: Listing[]; completed: boolean } | null> => {
+      // 1) Create the run (each attempt is a brand-new FindAll run).
       const body: Record<string, unknown> = { query: q, budget }
       if (opts.city) body.city = opts.city
       if (opts.requirements) body.requirements = opts.requirements
@@ -143,12 +163,14 @@ export function useSearch() {
         api("/api/search"),
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) },
       )
-      if (!live()) return
+      if (!live()) return null
       const { runId, objective, minBeds, maxBeds } = created
 
-      say(`Objective: ${objective}\n`)
-      say(`Budget: $${budget.toLocaleString()}/mo`)
-      if (minBeds) say(` · ${minBeds}+ beds`)
+      if (attempt === 1) {
+        say(`Objective: ${objective}\n`)
+        say(`Budget: $${budget.toLocaleString()}/mo`)
+        if (minBeds) say(` · ${minBeds}+ beds`)
+      }
       say(`\n\nStarting entity discovery…\nRun: ${runId}\nSearching and verifying candidates…\n\n`)
 
       // City rides along on every poll/finalize call so the stateless server
@@ -166,6 +188,9 @@ export function useSearch() {
       let prevGenerated = -1
       let prevMatched = -1
       let prevReady = -1
+      let discoverCompleted = false
+      let lastReadyChangeAt = 0
+      const discoverStartedAt = Date.now()
       const seenIds = new Set<string>()
 
       // Add newly verified listings to the UI in live time; enrichment
@@ -202,7 +227,7 @@ export function useSearch() {
 
       for (let i = 0; i < MAX_POLLS; i++) {
         await sleep(POLL_MS)
-        if (!live()) return
+        if (!live()) return null
 
         let poll: PollResponse
         try {
@@ -210,14 +235,14 @@ export function useSearch() {
         } catch {
           continue // transient poll failure — try again next tick
         }
-        if (!live()) return
+        if (!live()) return null
 
         // Terminal failure from the search provider (e.g. FindAll run errored
         // or was cancelled). Surface it immediately instead of polling until
         // the timeout — otherwise the UI just spins for minutes.
         if (poll.state === "failed" || poll.state === "cancelled" || poll.state === "error") {
           fail("The search service hit an error on this run (it may be rate-limited or over quota). Please try again in a bit.")
-          return
+          return null
         }
 
         if (poll.listings.length) mergeIncoming(poll.listings)
@@ -232,17 +257,30 @@ export function useSearch() {
             prevGenerated = poll.generated
             prevMatched = poll.matched
           }
-          if (poll.state === "completed") {
-            say(`\nVerified ${poll.matched}. Extracting listing details…\n`)
+          // Proceed to enrichment when discovery completes, OR when it has run
+          // long enough with at least one match (a rare query may never fill
+          // match_limit and so never reports `completed` — don't hang on it).
+          const discoverTimedOut =
+            Date.now() - discoverStartedAt > DISCOVER_MAX_WAIT_MS && poll.matched >= 1
+          if (poll.state === "completed" || discoverTimedOut) {
+            if (discoverTimedOut && poll.state !== "completed") {
+              say(`\nDiscovery slow — proceeding with ${poll.matched} verified so far…\n`)
+            } else {
+              say(`\nVerified ${poll.matched}. Extracting listing details…\n`)
+            }
             setPhase({ key: "extract", detail: "Extracting price, beds & address…" })
             try {
               await fetchJson(api(`/api/search/${runId}/enrich`), { method: "POST" })
             } catch (e) {
               fail(e instanceof Error ? e.message : "enrichment failed")
-              return
+              return null
             }
             enrichStarted = true
             enrichStartedAt = Date.now()
+            lastReadyChangeAt = Date.now()
+            // Did discovery reach `completed` (filled/exhausted), or did we bail
+            // out early? Drives whether a thin result is worth retrying.
+            discoverCompleted = poll.state === "completed"
             await sleep(POLL_MS) // let the enrich job flip status to running
           }
           continue
@@ -257,11 +295,19 @@ export function useSearch() {
           say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
           setPhase({ key: "extract", detail: `Extracting details — ${poll.rentPopulated}/${total} ready` })
           prevReady = poll.rentPopulated
+          lastReadyChangeAt = Date.now()
         }
         const enrichTimedOut = Date.now() - enrichStartedAt > ENRICH_MAX_WAIT_MS && poll.rentPopulated >= 1
-        if (poll.state !== "completed" && !enrichTimedOut) continue
+        // A run that never `completed` won't ever report enrichment done via
+        // state, so finalize once every candidate is populated OR enrichment
+        // has settled (no new rents for ENRICH_SETTLE_MS). Only for escaped
+        // runs — a normally-completing run still waits for `completed`.
+        const enrichSettled = !discoverCompleted && poll.rentPopulated >= 1 &&
+          (poll.rentPopulated >= poll.candidateCount ||
+            Date.now() - lastReadyChangeAt > ENRICH_SETTLE_MS)
+        if (poll.state !== "completed" && !enrichTimedOut && !enrichSettled) continue
         if (poll.state !== "completed") {
-          say(`\nEnrichment slow — finalizing ${poll.rentPopulated} ready now.\n`)
+          say(`\nFinalizing ${poll.rentPopulated} ready now.\n`)
         }
 
         // 3) Finalize: geocode + score everything in one server call.
@@ -270,22 +316,47 @@ export function useSearch() {
         const fin = await fetchJson<{ listings: Listing[] }>(
           api(`/api/search/${runId}/finalize?budget=${budget}${minBeds ? `&minBeds=${minBeds}` : ""}${cityParam}${maxBedsParam}`),
         )
-        if (!live()) return
+        if (!live()) return null
 
         for (const l of fin.listings) {
           const price = l.price ? `$${l.price.toLocaleString()}/mo` : "—"
           const bd = l.bedrooms != null ? `${l.bedrooms}bd` : "?bd"
           say(`  + ${l.address ?? "—"} — ${bd} — ${price}\n`)
         }
-        say(`\nDone. ${fin.listings.length} listings found.\n`)
-        setListings(fin.listings)
-        setPhase({ key: "done", detail: `${fin.listings.length} listing${fin.listings.length === 1 ? "" : "s"} found` })
-        setStreaming(false)
-        setDone(true)
-        return
+        return { listings: fin.listings, completed: discoverCompleted }
       }
 
       fail("Search timed out — please try again")
+      return null
+    }
+
+    try {
+      const first = await driveRun(1)
+      if (!live()) return
+      if (first === null) return // hard failure/timeout already surfaced
+      let result = first.listings
+
+      // Thin first pass: retry once with a fresh run before giving up, keeping
+      // whichever pass surfaced more. Only when discovery actually COMPLETED —
+      // a run that bailed early (rare/over-constrained query that never fills
+      // match_limit) is legitimately near-empty, so a second pass just doubles
+      // latency for the same answer.
+      if (first.completed && result.length < LOW_YIELD_RETRY_THRESHOLD) {
+        say(`\nOnly ${result.length} listing${result.length === 1 ? "" : "s"} so far — retrying discovery once for more…\n`)
+        setListings([])
+        const retry = await driveRun(2)
+        if (!live()) return
+        if (retry && retry.listings.length > result.length) result = retry.listings
+        // The first pass already succeeded, so a failed retry must not surface
+        // an error over the usable results we do have — clear it and show them.
+        setError(null)
+      }
+
+      say(`\nDone. ${result.length} listings found.\n`)
+      setListings(result)
+      setPhase({ key: "done", detail: `${result.length} listing${result.length === 1 ? "" : "s"} found` })
+      setStreaming(false)
+      setDone(true)
     } catch (err) {
       fail(err instanceof Error ? err.message : "Search failed")
     }
