@@ -505,16 +505,16 @@ function DemoAppInner({ config }: { config: AppConfig }) {
         ) : (
           <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
             <FeatureCard
-              title="Cited every time"
-              body="Every fact comes back with the source URLs that support it. No hallucinated listings, no made-up addresses."
+              title="Every apartment links to a real listing"
+              body="Each result opens the actual unit's listing page — a specific street address, not a search page or an invented result you can't rent."
             />
             <FeatureCard
-              title="Verified match conditions"
-              body="The assistant checks each listing against your criteria one-by-one and shows you which conditions matched — and which didn't."
+              title="Checked against your must-haves"
+              body="Every place is verified one-by-one against what you asked for — beds, budget, pets, parking — and shows which of your requirements it actually meets."
             />
             <FeatureCard
-              title="Live monitor"
-              body="Lock in a search and let it run. New listings stream in automatically and highlight themselves as they arrive."
+              title="Keep watching for new units"
+              body="Leave a search running and fresh apartments that fit your criteria stream in on their own, highlighted the moment they appear."
             />
           </section>
         )}
