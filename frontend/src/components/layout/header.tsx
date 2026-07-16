@@ -43,9 +43,10 @@ export function Header({ config }: HeaderProps) {
         </div>
         <a
           href="/docs"
-          className="text-xs font-bold hover:underline"
-          style={{ color: Z.blueDark }}
+          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:brightness-95"
+          style={{ color: Z.blueDark, backgroundColor: Z.blueSoft, border: `1px solid ${Z.blueBorder}` }}
         >
+          <SparkleIcon size={11} color={Z.blue} />
           How this was built →
         </a>
       </div>

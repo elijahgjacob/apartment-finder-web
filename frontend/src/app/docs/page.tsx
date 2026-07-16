@@ -164,8 +164,8 @@ function ArchDiagram() {
 
   const boxes: DiagBox[] = [
     { x: COL, y: 24,  w: 220, h: 36, title: "User search",       accent: "blue", emphasis: true },
-    { x: COL, y: 88,  w: 220, h: 50, title: "POST /api/tasks",   sub: "natural-language query" },
-    { x: COL, y: 166, w: 220, h: 60, title: "FindAll create",    sub: "generator: pro" },
+    { x: COL, y: 88,  w: 220, h: 50, title: "POST /api/search",  sub: "natural-language query" },
+    { x: COL, y: 166, w: 220, h: 60, title: "FindAll create",    sub: "generator: base" },
     { x: COL, y: 254, w: 220, h: 70, title: "Match conditions",  sub: "is_rental_listing · fits_budget\n+ 18 enrichments" },
     { x: COL, y: 352, w: 220, h: 168, title: "_candidate_to_listing", bullets: [
       "block-domain guard",
@@ -175,9 +175,9 @@ function ArchDiagram() {
       "bedroom min post-filter",
       "enrichments → details",
     ]},
-    { x: COL, y: 548, w: 220, h: 60, title: "Task API (spam)",   sub: "processor: pro · 5 fact booleans" },
+    { x: COL, y: 548, w: 220, h: 60, title: "Task API (spam)",   sub: "processor: base · 5 fact booleans" },
     { x: COL, y: 636, w: 220, h: 60, title: "Geocode + score",   sub: "Nominatim ~1/sec · in-session" },
-    { x: COL, y: 724, w: 220, h: 50, title: "SSE stream",        sub: "GET /api/tasks/{id}/stream" },
+    { x: COL, y: 724, w: 220, h: 50, title: "Poll → finalize",   sub: "GET /api/search/{id}" },
     { x: COL, y: 802, w: 220, h: 36, title: "/demo UI (session)", accent: "blue", emphasis: true },
     { x: COL, y: 866, w: 220, h: 50, title: "Save to browser",   accent: "amber", emphasis: true, sub: "localStorage · client only" },
   ]
@@ -348,7 +348,7 @@ function ArchitectureTab() {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 220px", gap: 40 }}>
       <article>
         <H2 id="overview">Overview</H2>
-        <P>One flow, and it runs entirely on demand. The user types natural language &#x2192; the backend builds a Parallel FindAll run with explicit match conditions and 18 enrichments &#x2192; matched candidates are parsed, spam-scored, geocoded, and scored, then streamed to the UI over SSE as they&apos;re verified.</P>
+        <P>One flow, and it runs entirely on demand. The user types natural language &#x2192; the backend builds a Parallel FindAll run with explicit match conditions and 18 enrichments &#x2192; matched candidates are parsed, spam-scored, geocoded, and scored, then streamed to the UI as they&apos;re verified (the client polls the run; the server holds no state).</P>
         <P>The backend is <strong style={{ color: Z.text }}>stateless</strong>: no database, no catalog, nothing persisted server-side. Each search is independent and its results live only in the browser session. The one piece of persistence is client-side &#x2014; the user can <strong style={{ color: Z.text }}>Save</strong> listings to a shortlist kept in their own browser via <Code>localStorage</Code> (key <Code>apartment-finder-saved-targets</Code>), never sent to any server.</P>
 
         <H2 id="pipeline">Pipeline</H2>
@@ -362,7 +362,7 @@ function ArchitectureTab() {
           <Block>{`is_rental_listing
   → "individual rental property listing in or near {CITY}.
      Reject any candidate whose URL is on these domains:
-     zillow.com, apartments.com, yelp.com.
+     zillow.com, yelp.com, loopnet.com, crexi.com.
      Prefer the original landlord, broker, or property-management site."
 
 fits_budget
@@ -413,8 +413,9 @@ fits_budget
           <P>Refused at two layers: the FindAll match condition, and a URL guard during candidate parsing.</P>
           <div style={{ display: "flex", gap: 8, marginTop: 8, marginBottom: 8 }}>
             <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>zillow.com</Pill>
-            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>apartments.com</Pill>
             <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>yelp.com</Pill>
+            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>loopnet.com</Pill>
+            <Pill bg={Z.bgSubtle} color={Z.text} border={Z.border}>crexi.com</Pill>
           </div>
         </Card>
 
