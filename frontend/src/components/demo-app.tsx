@@ -232,10 +232,15 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setView("list")
+    // Resolve the city from the query text itself, not the (possibly stale)
+    // dropdown state, so the objective always matches what the user typed.
+    const searchCity = cityInQuery(query) ?? bayCity
+    if (searchCity && searchCity.label !== city) setCity(searchCity.label)
+    const hoods = extractNeighborhoodsFromQuery(query, searchCity?.label ?? city)
     startSearch(query, effectiveBudget, {
-      city: bayCity?.full ?? city,
+      city: searchCity?.full ?? city,
       requirements: withSqft(requirements, parsedSqft),
-      neighborhoods: parsedNeighborhoods.length ? parsedNeighborhoods : undefined,
+      neighborhoods: hoods.length ? hoods : undefined,
       sources: sources.hasIncludes ? sources.includeSources : undefined,
     })
   }
@@ -365,15 +370,18 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             suggestions={config.suggestions}
             onSelect={(s) => {
               setQuery(s)
-              // Parse budget/beds from the clicked suggestion itself —
-              // `effectiveBudget` still reflects the previous query text
-              // during this event (state hasn't re-rendered yet).
+              // Parse everything from the clicked suggestion itself. State
+              // (city, effectiveBudget) still reflects the previous query
+              // during this event, so resolve the city from `s` directly —
+              // otherwise the search fires against the old city.
+              const selCity = cityInQuery(s) ?? bayCity
+              if (selCity && selCity.label !== city) setCity(selCity.label)
               const beds = extractBedsFromQuery(s)
               const budget = extractBudgetFromQuery(s)
-                ?? defaultBudgetForBeds(beds, cityFloors, config.defaultBudget)
-              const hoods = extractNeighborhoodsFromQuery(s, city)
+                ?? defaultBudgetForBeds(beds, selCity?.rentFloors ?? cityFloors, config.defaultBudget)
+              const hoods = extractNeighborhoodsFromQuery(s, selCity?.label ?? city)
               startSearch(s, budget, {
-                city: bayCity?.full ?? city,
+                city: selCity?.full ?? city,
                 requirements: withSqft(requirements, extractSqftFromQuery(s)),
                 neighborhoods: hoods.length ? hoods : undefined,
                 sources: sources.hasIncludes ? sources.includeSources : undefined,
