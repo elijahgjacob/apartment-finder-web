@@ -440,10 +440,21 @@ fits_budget
           ["4. Standardized error sentinel", 'Every enrichment returns empty string when data is missing.'],
           ["5. Entity → Action → Specifics → Error", "All 18 enrichment descriptions follow this four-part structure."],
         ].map(([title, desc]) => (
-          <Card key={title}>
-            <H3>{title}</H3>
-            <P>{desc}</P>
-          </Card>
+          <div
+            key={title}
+            style={{
+              backgroundColor: Z.bgCard,
+              border: `1px solid ${Z.border}`,
+              borderRadius: 10,
+              padding: "12px 16px",
+              marginBottom: "0.6rem",
+            }}
+          >
+            <div style={{ fontFamily: FONT_HEADING, fontSize: "0.95rem", color: Z.text, fontWeight: 700, marginBottom: 3 }}>
+              {title}
+            </div>
+            <div style={{ color: Z.textSoft, fontSize: "0.9rem", lineHeight: 1.5 }}>{desc}</div>
+          </div>
         ))}
       </article>
 
@@ -469,6 +480,8 @@ type ApiCall = {
 type ApiCallsResponse = {
   calls: ApiCall[]
   stats: { total: number; errors: number; buffer_size: number }
+  // Present when the serverless deployment can't trace calls (no shared memory).
+  note?: string
 }
 
 const API_COLORS: Record<string, { bg: string; fg: string; border: string }> = {
@@ -691,7 +704,20 @@ function LiveApiCallsTab() {
         </Card>
       )}
 
-      {filtered.length === 0 && !error && (
+      {filtered.length === 0 && !error && data?.note && (
+        <Card>
+          <div style={{ fontSize: 13, fontWeight: 700, color: Z.text, marginBottom: 6 }}>
+            Live tracing isn&apos;t available on the hosted demo
+          </div>
+          <div style={{ fontSize: 13, color: Z.textSoft, lineHeight: 1.6 }}>
+            {data.note} Each search runs as independent serverless functions that share no
+            memory, so there&apos;s no in-process call log to stream here. See the{" "}
+            <strong>Architecture</strong> tab for the exact FindAll and Task API calls this app
+            makes, with their request and response shapes.
+          </div>
+        </Card>
+      )}
+      {filtered.length === 0 && !error && !data?.note && (
         <div style={{ textAlign: "center", padding: "60px 0", color: Z.textFaint }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>No API calls recorded yet</div>
           <div style={{ fontSize: 12, marginTop: 8 }}>Run a search from the main page to see calls appear here in real time.</div>
@@ -813,7 +839,7 @@ export default function DocsPage() {
       >
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "12px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <img src="/parallel-logo.svg" alt="Parallel" style={{ height: 28, width: "auto" }} />
+            <img src="/parallel-logo.svg" alt="Parallel" style={{ height: 28, width: "auto", display: "block" }} />
             <span
               style={{
                 paddingLeft: 16, borderLeft: `1px solid ${Z.border}`,
@@ -836,7 +862,7 @@ export default function DocsPage() {
           <div style={{ height: 16 }} />
           <H1>How this was built</H1>
           <p style={{ fontSize: "1.15rem", color: Z.textMid, lineHeight: 1.55, marginTop: 12, maxWidth: 720 }}>
-            A technical reference for the pipeline, live visibility into every external API call,
+            A technical reference for the pipeline, the exact external API calls it makes,
             and the runtime configuration driving this instance.
           </p>
         </section>
