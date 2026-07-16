@@ -52,6 +52,15 @@ export function isIndividualListingUrl(url: string | null | undefined): boolean 
     if (u.protocol !== "http:" && u.protocol !== "https:") return false
     const host = u.hostname.toLowerCase().replace(/^www\./, "")
     if (BLOCKED_LINK_HOSTS.some((d) => host === d || host.endsWith(`.${d}`))) return false
+    // Craigslist detail pages live under `/d/` (e.g. /view/d/<slug>/<id> or
+    // /<subarea>/apa/d/<slug>/<id>.html). Their slugs often embed the search
+    // terms — "…-mission-bedroom-under-3800/…" — which would otherwise trip the
+    // price-band / category patterns and drop a real listing. A `/d/` path is
+    // an individual unit; only `/search/` is a Craigslist index (rejected below
+    // by the generic patterns since it has no `/d/`).
+    if ((host === "craigslist.org" || host.endsWith(".craigslist.org")) && /\/d\//i.test(u.pathname)) {
+      return true
+    }
     const deep = u.pathname.replace(/\/+$/, "").length > 0 || u.search.length > 0
     return deep && !isSearchOrCategoryUrl(url)
   } catch {
