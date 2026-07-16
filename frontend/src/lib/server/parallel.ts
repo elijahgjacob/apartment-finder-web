@@ -212,7 +212,11 @@ export async function findallCreate(opts: {
   minBeds?: number | null
 }): Promise<FindAllCreateResult> {
   const city = opts.city?.trim() || CITY_SHORT
-  const bedsStr = opts.minBeds ? `${opts.minBeds} bedroom ` : ""
+  // 0 is studio (not "unset"), so express it explicitly rather than dropping it.
+  const bedsStr =
+    opts.minBeds == null ? "" :
+    opts.minBeds === 0 ? "studio " :
+    `${opts.minBeds} bedroom `
   let objective =
     `Find ${bedsStr}apartments for rent ` +
     `under ${opts.budget} dollars per month in ${city}`

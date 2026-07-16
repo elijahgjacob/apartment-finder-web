@@ -5,7 +5,7 @@ import { ConfigProvider } from "@/providers/config-provider"
 import { buildAppConfig } from "@/lib/server/app-config"
 
 const TITLE = "Bay Area Apartment Finder"
-const DESCRIPTION = "Find your Bay Area home in your own words. AI-powered apartment search with cited sources."
+const DESCRIPTION = "Find your Bay Area rental in your own words. AI-powered apartment search with cited sources."
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://apartment-finder-web.vercel.app"),

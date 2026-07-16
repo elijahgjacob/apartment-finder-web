@@ -53,10 +53,10 @@ export const BRAND_DISCLAIMER = envStr(
 
 export const SUGGESTIONS = envStr(
   "SEARCH_SUGGESTIONS",
-  "2BR in the Mission under $5,000|" +
-  "Pet-friendly studio near BART, under $3,000|" +
-  "3-bedroom with parking, available within a month|" +
-  "Furnished 1BR, dog-friendly, short-term lease",
+  "2 bedroom in the Mission under $4,600|" +
+  "1 bedroom near UC Berkeley under $3,000|" +
+  "Studio in Palo Alto under $2,600|" +
+  "2 bed 1,000 sq ft in Oakland under $3,500",
 ).split("|").map((s) => s.trim()).filter(Boolean)
 
 // Typical monthly-rent floors by bedroom count for the default city (SF).

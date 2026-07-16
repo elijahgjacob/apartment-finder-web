@@ -1,6 +1,6 @@
 # Apartment Finder Web
 
-AI-powered apartment search that discovers and verifies real listings using the Parallel API.
+AI-powered Bay Area apartment search that discovers and verifies real listings using the Parallel API. Describe what you want in plain language, pick a Bay Area city, and get back individual listings you can actually open, each checked against your criteria.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/elijahgjacob/apartment-finder-web/actions/workflows/ci.yml/badge.svg)](https://github.com/elijahgjacob/apartment-finder-web/actions/workflows/ci.yml)
@@ -18,7 +18,7 @@ graph LR
     A -.->|saved shortlist| E[(Browser<br/>localStorage)]
 ```
 
-A **single Next.js app** — all server logic lives in serverless API routes
+A **single Next.js app**: all server logic lives in serverless API routes
 (`src/app/api/*`) that call the Parallel API directly. There is no separate
 backend, no database, and no long-lived connections: the client drives each
 search (create → poll → enrich → finalize), every step a short serverless
@@ -29,13 +29,13 @@ The frontend is built with the **Next.js App Router**, React 19, and Tailwind CS
 
 ## Features
 
-- **Natural-language search** — describe what you want; it becomes a Parallel FindAll run with explicit match conditions
-- **AI verification** — each candidate is validated against configurable match conditions (beds, budget, location, availability)
-- **Live results** — verified listings appear in the grid the moment FindAll confirms them, then enrich in place (price, beds, address, 18 fields)
-- **Fraud check** — a second, user-triggered run re-verifies untrusted-source listings via the Parallel Task API against fact-based scam signals (off-platform payment, owner abroad, withheld address, no viewings, unusual incentives)
-- **Interactive map** — browse verified listings on a Leaflet map (coordinates resolved via OSM Nominatim during the search)
-- **Scoring engine** — listings scored 0-100 on price fit and proximity to the reference point
-- **Saved targets** — star listings you want to keep; the shortlist lives in your browser only
+- **Natural-language search**: describe what you want; it becomes a Parallel FindAll run with explicit match conditions
+- **AI verification**: each candidate is validated against configurable match conditions (beds, budget, location, availability)
+- **Live results**: verified listings appear in the grid the moment FindAll confirms them, then enrich in place (price, beds, address, 18 fields)
+- **Fraud check**: a second, user-triggered run re-verifies untrusted-source listings via the Parallel Task API against fact-based scam signals (off-platform payment, owner abroad, withheld address, no viewings, unusual incentives)
+- **Interactive map**: browse verified listings on a Leaflet map (coordinates resolved via OSM Nominatim during the search)
+- **Scoring engine**: listings scored 0-100 on price fit and proximity to the reference point
+- **Saved targets**: star listings you want to keep; the shortlist lives in your browser only
 
 ## Quick Start
 
@@ -55,7 +55,7 @@ echo "PARALLEL_API_KEY=your-key-here" > .env.local
 npm run dev
 ```
 
-The app runs at http://localhost:3000 — no other process needed.
+The app runs at http://localhost:3000. No other process needed.
 
 ### Deploy
 
@@ -70,7 +70,7 @@ cd frontend && npx vercel deploy --prod
 
 ```
 apartment-finder-web/
-├── frontend/                    # The app (Next.js — this is everything)
+├── frontend/                    # The app (Next.js, this is everything)
 │   ├── src/
 │   │   ├── app/                 # Pages and layouts
 │   │   │   └── api/             # Serverless API routes
@@ -101,11 +101,11 @@ Key variables:
 | Variable | Description |
 |---|---|
 | `PARALLEL_API_KEY` | API key from platform.parallel.ai (required) |
-| `CITY` / `CITY_SHORT` | Default city a search targets (users can override per search) |
+| `CITY` / `CITY_SHORT` | Default city (the UI offers a dropdown of Bay Area cities; users can override per search) |
 | `SEARCH_BUDGET` | Default maximum monthly rent |
 | `RENT_FLOORS` | Typical rent by bedroom count (drives auto-budget + scoring) |
-| `FINDALL_GENERATOR` | FindAll generator tier (`base` default, `pro` for exhaustive) |
-| `FINDALL_MATCH_LIMIT` | Max verified listings per search (default 8) |
+| `FINDALL_GENERATOR` | FindAll generator tier (`base` default, `pro`/`core` for more exhaustive) |
+| `FINDALL_MATCH_LIMIT` | Max verified candidates per search (default 10) |
 
 See [`frontend/src/lib/server/config.ts`](frontend/src/lib/server/config.ts) for the full reference.
 

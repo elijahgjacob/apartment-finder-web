@@ -271,6 +271,29 @@ export function cityByName(name: string | null | undefined): BayAreaCity | null 
   return byName.get(key) ?? byName.get(key.split(",")[0].trim()) ?? null
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+// City label + alias terms, longest first so "Palo Alto" wins over a shorter
+// alias and multi-word names match before single tokens.
+const CITY_QUERY_TERMS: { term: string; city: BayAreaCity }[] = BAY_AREA_CITIES
+  .flatMap((c) => [c.label, ...c.aliases].map((term) => ({ term, city: c })))
+  .sort((a, b) => b.term.length - a.term.length)
+
+/**
+ * Detect a Bay Area city named anywhere in a free-text query, case-insensitive
+ * and word-bounded, e.g. "Palo Alto homes in the bubble" -> Palo Alto. Returns
+ * null when no known city (or alias) is mentioned.
+ */
+export function cityInQuery(query: string | null | undefined): BayAreaCity | null {
+  if (!query || !query.trim()) return null
+  for (const { term, city } of CITY_QUERY_TERMS) {
+    if (new RegExp(`(?<![\\w-])${escapeRegExp(term)}(?![\\w-])`, "i").test(query)) return city
+  }
+  return null
+}
+
 // Enrichment phrases neighborhoods loosely ("Mission District", "the
 // Marina"), so normalize before matching the table.
 function normalizeNeighborhood(s: string): string {
