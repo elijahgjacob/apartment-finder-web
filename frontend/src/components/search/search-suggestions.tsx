@@ -8,6 +8,7 @@ interface SearchSuggestionsProps {
   parsedBeds: number | null
   parsedBudget: number | null
   parsedNeighborhoods: string[]
+  parsedSqft: number | null
   effectiveBudget: number
   budgetLikelyTooLow: boolean
   floor: number | null
@@ -18,12 +19,12 @@ interface SearchSuggestionsProps {
 
 export function SearchSuggestions({
   suggestions, onSelect,
-  parsedBeds, parsedBudget, parsedNeighborhoods, effectiveBudget,
+  parsedBeds, parsedBudget, parsedNeighborhoods, parsedSqft, effectiveBudget,
   budgetLikelyTooLow, floor, city, query, onQueryChange,
 }: SearchSuggestionsProps) {
   return (
     <>
-      {(parsedBeds != null || parsedBudget != null || parsedNeighborhoods.length > 0) && (
+      {(parsedBeds != null || parsedBudget != null || parsedNeighborhoods.length > 0 || parsedSqft != null) && (
         <div className="mt-3 flex items-center gap-2 flex-wrap">
           <span className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: Z.textFaint }}>
             Parsed
@@ -44,6 +45,15 @@ export function SearchSuggestions({
               style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
             >
               {parsedBeds === 0 ? "studio" : `${parsedBeds} bd`}
+            </span>
+          )}
+          {parsedSqft != null && (
+            <span
+              className="text-[11px] px-2 py-0.5 rounded-full font-semibold"
+              style={{ backgroundColor: Z.blueSoft, color: Z.blueDarker, border: `1px solid ${Z.blueBorder}` }}
+              title="Minimum square footage recognized in your query"
+            >
+              ≥ {parsedSqft.toLocaleString()} sqft
             </span>
           )}
           {parsedBudget != null ? (

@@ -30,6 +30,10 @@ export const SEARCH_PAGE_PATTERNS: RegExp[] = [
   /\/shopping-centers?\//i,              // POI/directory pages (apartmenthomeliving)
   /\/find\//i,                           // forrent.com-style /find/… search paths
   /(?:less|more|under|over)-than-\$?\d{2,}/i, // price-filter search segments (…/less-than-3000)
+  // Rentler city/state index pages: /places-for-rent[/{state}[/{city}]] (a
+  // map of all listings). Individual units add /{street-slug}/{numeric-id}
+  // beyond the city, so those deeper paths are NOT matched here.
+  /\/places-for-rent(?:\/[a-z]{2}(?:\/[a-z0-9-]+)?)?\/?(?:[?#]|$)/i,
 ]
 
 // Aggregator hosts we never link to even if a URL looks listing-shaped —

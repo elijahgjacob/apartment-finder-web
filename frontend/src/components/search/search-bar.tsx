@@ -65,9 +65,6 @@ export function SearchBar({
             <option key={c.key} value={c.label}>{c.label}</option>
           ))}
         </select>
-        <span className="text-[11px] uppercase tracking-[0.1em] font-bold" style={{ color: Z.textFaint }}>
-          Bay Area
-        </span>
         <div className="ml-auto flex items-center gap-2">
           <button
             type="button"

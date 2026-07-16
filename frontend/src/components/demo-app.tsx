@@ -90,6 +90,23 @@ function extractBudgetFromQuery(query: string): number | null {
   return null
 }
 
+// Minimum square footage from phrases like "1000 sq ft", "1,200 sqft",
+// "900+ square feet". Bare "sf" is intentionally not matched — it collides
+// with "SF" (San Francisco).
+function extractSqftFromQuery(query: string): number | null {
+  const m = query.match(/(\d[\d,]{2,})\s*\+?\s*(?:sq\s*\.?\s*ft\.?|sqft|square\s+f(?:ee|oo)t)\b/i)
+  if (!m) return null
+  const n = parseInt(m[1].replace(/,/g, ""), 10)
+  return Number.isFinite(n) && n >= 100 && n <= 20000 ? n : null
+}
+
+// Fold a parsed min-sqft into the free-text requirements handed to FindAll so
+// the objective actually asks for it (there's no dedicated sqft filter).
+function withSqft(requirements: string, sqft: number | null): string | undefined {
+  const parts = [requirements.trim(), sqft ? `at least ${sqft} square feet` : ""].filter(Boolean)
+  return parts.length ? parts.join(". ") : undefined
+}
+
 function defaultBudgetForBeds(beds: number | null, floors: Record<string, number>, fallback: number): number {
   const floor = realisticFloor(beds, floors)
   return floor != null ? Math.round(floor * 1.3 / 250) * 250 : fallback
@@ -185,6 +202,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const parsedBeds = useMemo(() => extractBedsFromQuery(query), [query])
   const parsedBudget = useMemo(() => extractBudgetFromQuery(query), [query])
   const parsedNeighborhoods = useMemo(() => extractNeighborhoodsFromQuery(query, city), [query, city])
+  const parsedSqft = useMemo(() => extractSqftFromQuery(query), [query])
   const effectiveBudget = useMemo(
     () => parsedBudget ?? defaultBudgetForBeds(parsedBeds, cityFloors, config.defaultBudget),
     [parsedBudget, parsedBeds, cityFloors, config.defaultBudget],
@@ -203,7 +221,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
     setView("list")
     startSearch(query, effectiveBudget, {
       city: bayCity?.full ?? city,
-      requirements: requirements || undefined,
+      requirements: withSqft(requirements, parsedSqft),
       neighborhoods: parsedNeighborhoods.length ? parsedNeighborhoods : undefined,
       sources: sources.hasIncludes ? sources.includeSources : undefined,
     })
@@ -314,8 +332,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           <p className="text-base sm:text-lg mb-7 max-w-2xl leading-relaxed" style={{ color: Z.textMid }}>
             Describe what you want like you&apos;d tell a friend. The assistant searches the web
             across San Francisco, the East Bay, and the Peninsula,
-            verifies every match against your criteria, and returns each result with cited sources —
-            no guessing, no hallucinated listings.
+            verifies every match against your criteria, and returns each result with cited sources.
           </p>
 
           <SearchBar
@@ -343,7 +360,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               const hoods = extractNeighborhoodsFromQuery(s, city)
               startSearch(s, budget, {
                 city: bayCity?.full ?? city,
-                requirements: requirements || undefined,
+                requirements: withSqft(requirements, extractSqftFromQuery(s)),
                 neighborhoods: hoods.length ? hoods : undefined,
                 sources: sources.hasIncludes ? sources.includeSources : undefined,
               })
@@ -351,6 +368,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             parsedBeds={parsedBeds}
             parsedBudget={parsedBudget}
             parsedNeighborhoods={parsedNeighborhoods}
+            parsedSqft={parsedSqft}
             effectiveBudget={effectiveBudget}
             budgetLikelyTooLow={budgetLikelyTooLow}
             floor={floor}
