@@ -346,6 +346,17 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const showingSaved = view === "saved"
   const visibleListings = showingSaved ? savedSorted : filteredListings
 
+  // On the map, always fold in saved targets alongside the current results
+  // (deduped) so the shortlist stays pinned for reference; saved markers are
+  // rendered distinctly (orange, starred) in ApartmentMap.
+  const savedIdSet = useMemo(() => new Set(saved.map((s) => s.id)), [saved])
+  const mapListings = useMemo(() => {
+    const byId = new Map<string, Listing>()
+    for (const l of visibleListings) byId.set(l.id, l)
+    for (const s of saved) if (!byId.has(s.id)) byId.set(s.id, s)
+    return [...byId.values()]
+  }, [visibleListings, saved])
+
   const floor = useMemo(() => realisticFloor(parsedBeds, cityFloors), [parsedBeds, cityFloors])
   const budgetLikelyTooLow = floor != null && parsedBudget != null && parsedBudget < floor
 
@@ -599,7 +610,8 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
             {view === "map" && (
               <ApartmentMap
-                listings={visibleListings}
+                listings={mapListings}
+                savedIds={savedIdSet}
                 config={mapConfig}
                 hoveredId={hoveredId}
                 onMarkerClick={handleMarkerClick}
