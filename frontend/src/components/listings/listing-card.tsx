@@ -152,6 +152,17 @@ export function ListingCard({
       </div>
 
       <div className="flex items-start justify-between gap-4 mb-3">
+        {/* Candidates aren't clickable: their URLs haven't passed verification
+            yet and may change or drop out. The link activates once verified. */}
+        {candidate ? (
+          <span
+            title="Link activates once this candidate is verified"
+            className="text-[18px] font-bold block leading-tight flex-1 min-w-0 truncate cursor-default"
+            style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}
+          >
+            {l.address ?? l.title ?? "—"}
+          </span>
+        ) : (
         <a
           href={href}
           target="_blank"
@@ -161,6 +172,7 @@ export function ListingCard({
         >
           {l.address ?? l.title ?? "—"}
         </a>
+        )}
         <div className="text-right shrink-0">
           <div
             className="text-[26px] font-bold leading-none"
@@ -196,7 +208,7 @@ export function ListingCard({
       )}
 
       <MatchPills listing={l} />
-      <Citations listing={l} />
+      <Citations listing={l} disabled={candidate} />
     </article>
   )
 }
