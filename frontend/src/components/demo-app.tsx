@@ -331,13 +331,20 @@ function DemoAppInner({ config }: { config: AppConfig }) {
         {/* Once a search is active, collapse the hero copy on mobile so results
             aren't pushed two screens down; desktop keeps the full hero. */}
         <div className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-5 pb-6 sm:pt-14 sm:pb-12" : "pt-14 pb-12"}`}>
-          <div className={`${hasActivity ? "hidden sm:inline-flex" : "inline-flex"} items-center gap-1.5 px-3 py-1 rounded-full mb-5`}
-            style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}>
+          {/* Brand credit: a real link to parallel.ai, visible on mobile and
+              desktop, including mid-search. */}
+          <a
+            href="https://parallel.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full transition-colors hover:brightness-95 ${hasActivity ? "mb-3 sm:mb-5" : "mb-5"}`}
+            style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}
+          >
             <SparkleIcon size={12} color={Z.blue} />
             <span className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: Z.blueDark }}>
               Powered by Parallel
             </span>
-          </div>
+          </a>
           <h1
             className="font-medium mb-4 max-w-3xl"
             style={{
@@ -561,7 +568,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
         ) : null}
       </main>
 
-      <Footer disclaimer={config.brand.disclaimer} />
+      <Footer />
     </div>
   )
 }
