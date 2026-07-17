@@ -10,7 +10,6 @@ neighborhood centroids, and per-city rent floors are preloaded in
 - **App**: Next.js App Router, React 19, TypeScript, Tailwind CSS, shadcn/ui — lives in `frontend/` (this is the whole app)
 - **Server logic**: Next.js serverless API routes (`frontend/src/app/api/*`) calling the Parallel API directly — no separate backend, no database, no long-lived connections
 - **Search**: Parallel FindAll API for discovery + structured enrichment; Parallel Task API for the user-triggered fraud check
-- `backend/` is the **legacy FastAPI implementation** — unused by the app; do not extend it
 
 ## Architecture
 
@@ -26,8 +25,7 @@ frontend/src/
 │   ├── api/               # Serverless API routes
 │   │   ├── config/        # App config (env-driven)
 │   │   ├── search/        # FindAll: create / [id] poll / enrich / finalize
-│   │   ├── verify/        # Task API fraud check: create / [id] poll
-│   │   └── debug/         # Stub for the /docs live tab
+│   │   └── verify/        # Task API fraud check: create / [id] poll
 │   └── docs/              # Architecture docs page
 ├── components/            # UI components (search/, listings/, map/, reasoning/, etc.)
 ├── hooks/                 # use-search (search state machine), use-saved-targets

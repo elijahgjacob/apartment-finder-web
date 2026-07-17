@@ -3,7 +3,7 @@
 // Individual listings carry a street address or a numeric id in the path;
 // the patterns below only ever appear on list/category pages.
 
-export const SEARCH_PAGE_PATTERNS: RegExp[] = [
+const SEARCH_PAGE_PATTERNS: RegExp[] = [
   /\/apartments\/$/i,
   /\/apartments-\d+-bedrooms\/$/i,
   /\/apartments-under-\d+\/$/i,

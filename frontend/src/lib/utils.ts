@@ -1,10 +1,4 @@
-import { clsx, type ClassValue } from "clsx"
-import { twMerge } from "tailwind-merge"
 import { isIndividualListingUrl } from "./listing-url"
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
 
 /**
  * Return `url` only if it is a safe http(s) link, otherwise `fallback`.

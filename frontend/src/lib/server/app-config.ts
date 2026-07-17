@@ -1,13 +1,12 @@
 // Builds the AppConfig object served to the client. Called from the server
 // layout (config is inlined into the initial HTML — no client fetch) and from
-// the legacy /api/config route used by the /docs live tab.
+// the /api/config route used by the /docs live-config table.
 
 import {
-  APP_TITLE, CITY, CITY_SHORT,
-  DEFAULT_BUDGET, DEFAULT_QUERY,
+  APP_TITLE, CITY, CITY_SHORT, DEFAULT_BUDGET,
   REFERENCE_POINT_NAME, REFERENCE_POINT_LAT, REFERENCE_POINT_LNG,
   MAP_CENTER_LAT, MAP_CENTER_LNG, MAP_ZOOM,
-  BRAND_NAME, BRAND_TAGLINE, BRAND_LOGO_URL, BRAND_DISCLAIMER,
+  BRAND_NAME, BRAND_LOGO_URL,
   SUGGESTIONS, RENT_FLOORS,
   AGGREGATOR_SOURCES, STALE_AGGREGATOR_DAYS, STALE_DIRECT_DAYS,
 } from "./config"
@@ -26,12 +25,9 @@ export function buildAppConfig(): AppConfig {
     mapCenter: { lat: MAP_CENTER_LAT, lng: MAP_CENTER_LNG },
     mapZoom: MAP_ZOOM,
     defaultBudget: DEFAULT_BUDGET,
-    defaultQuery: DEFAULT_QUERY,
     brand: {
       name: BRAND_NAME,
-      tagline: BRAND_TAGLINE,
       logoUrl: BRAND_LOGO_URL,
-      disclaimer: BRAND_DISCLAIMER,
     },
     suggestions: SUGGESTIONS,
     rentFloors: Object.fromEntries(
