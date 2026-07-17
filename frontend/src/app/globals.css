@@ -43,6 +43,16 @@
 .af-field-cell.af-verified {
   background-color: #FB631B;
   animation: af-cell-pop 0.5s cubic-bezier(0.8, 0.45, 0.2, 1) both;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Verified cells carry the app's house mark (off-white on the signal-orange
+   tile) so a match reads as "a home found", echoing the logo. */
+.af-field-cell.af-verified svg {
+  width: 64%;
+  height: 64%;
+  display: block;
 }
 @media (prefers-reduced-motion: reduce) {
   .af-field-cell { animation: none; }

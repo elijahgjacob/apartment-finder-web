@@ -25,6 +25,16 @@ const SCATTER = (() => {
   return idx
 })()
 
+// The app's house mark (same silhouette as the icon), off-white so it reads
+// cleanly on the signal-orange verified tile.
+function HouseMark() {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" aria-hidden>
+      <path d="M32 4 L58 26 V53 Q58 60 51 60 H13 Q6 60 6 53 V26 Z" fill="#FCFCFA" />
+    </svg>
+  )
+}
+
 export function DiscoveryField({
   progress, phase,
 }: {
@@ -71,13 +81,18 @@ export function DiscoveryField({
         role="img"
         aria-label={`Search in progress: ${counts}`}
       >
-        {Array.from({ length: CELLS }, (_, i) => (
-          <span
-            key={i}
-            className={`af-field-cell${verified.has(i) ? " af-verified" : ""}`}
-            style={verified.has(i) ? undefined : { animationDelay: `${(i % COLS) * 90 + Math.floor(i / COLS) * 140}ms` }}
-          />
-        ))}
+        {Array.from({ length: CELLS }, (_, i) => {
+          const isVerified = verified.has(i)
+          return (
+            <span
+              key={i}
+              className={`af-field-cell${isVerified ? " af-verified" : ""}`}
+              style={isVerified ? undefined : { animationDelay: `${(i % COLS) * 90 + Math.floor(i / COLS) * 140}ms` }}
+            >
+              {isVerified && <HouseMark />}
+            </span>
+          )
+        })}
       </div>
 
       <div className="flex items-center justify-between mt-5 px-3">
