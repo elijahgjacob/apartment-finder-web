@@ -1,7 +1,6 @@
-// Secondary listing verification via the Task API, ported from the FastAPI
-// backend's spam_service. Per the cookbook: avoid subjective "is_likely_spam"
-// outputs — decompose into fact-based booleans the API can verify with
-// citations, then weight them in code.
+// Secondary listing verification via the Task API. Approach: avoid subjective
+// "is_likely_spam" outputs — decompose into fact-based booleans the API can
+// verify with citations, then weight them in code.
 
 export const SPAM_SCHEMA = {
   type: "object",

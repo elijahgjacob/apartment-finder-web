@@ -1,5 +1,5 @@
 // Candidate → listing parsing, plausibility filters, and scoring.
-// Faithful port of the FastAPI backend's search_service/parsing logic.
+// Listing parsing, scoring, and dedupe logic for the search pipeline.
 
 import {
   BLOCKED_DOMAINS, LISTING_SITES, RENT_FLOORS,

@@ -30,3 +30,7 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy local-only FastAPI prototype (never part of the shipped app)
+backend/
+docker-compose.yml

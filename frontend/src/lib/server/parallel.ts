@@ -1,5 +1,5 @@
-// Parallel FindAll API client + prompt definitions, ported from the FastAPI
-// backend. Each function is a single short HTTP call — serverless-friendly.
+// Parallel FindAll API client + prompt definitions. Each function is a single
+// short HTTP call — serverless-friendly.
 
 import {
   BLOCKED_DOMAINS, CITY_SHORT,

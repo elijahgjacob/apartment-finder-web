@@ -1,5 +1,5 @@
-// Server-side configuration (Next.js API routes). Ported from the FastAPI
-// backend's config.py — every value is env-overridable, same names.
+// Server-side configuration for the Next.js API routes. Every value is
+// env-overridable.
 
 function envStr(key: string, fallback: string): string {
   return process.env[key] ?? fallback
@@ -74,20 +74,17 @@ export const AGGREGATOR_SOURCES = envStr(
 export const STALE_AGGREGATOR_DAYS = envNum("STALE_AGGREGATOR_DAYS", 14)
 export const STALE_DIRECT_DAYS = envNum("STALE_DIRECT_DAYS", 45)
 
-// Latency vs. recall balance for an interactive search. Measured: enrichment
-// dominates wall-clock — each per-listing Task is slow (core ~100s/listing,
-// pro/ultra far worse), so the search must NOT block on enriching every match.
-// - Discovery: fast "base" generator (finding candidate URLs is easy).
-// - Enrichment: "core". Measured tradeoff — "base" is no faster to first
-//   result but extracts poorly, so blank price/beds listings get filtered and
-//   recall collapses; "core" reads pages reliably so the results we surface are
-//   usable. pro/ultra are far slower for no recall gain here. The client caps
-//   how long it waits on enrichment (see use-search) and finalizes with what's
-//   ready, so core's slower tail doesn't stall the search.
-// - match_limit: the accessibility gate drops a large share of "verified"
-//   candidates (Zillow/blocked hosts, category/index pages, dupes), so ~6
-//   matches yielded only ~2 shown. 10 gives more headroom for survivors —
-//   more listings per search — at some added discovery/enrichment time.
+// Generator tiers and match limit for an interactive search. Enrichment (a
+// per-listing Task) dominates wall-clock, so the search must not block on
+// enriching every match — the client caps how long it waits and finalizes with
+// what's ready (see use-search).
+// - Discovery uses the fast "base" generator; finding candidate URLs is easy.
+// - Enrichment defaults to "base" here (see the note below). A higher tier
+//   extracts pages more reliably at the cost of latency; raise it only if blank
+//   price/beds listings are getting filtered out and hurting recall.
+// - match_limit is set above the number we expect to show, because some
+//   candidates are dropped downstream (blocked hosts, category/index pages,
+//   duplicates). The extra headroom means more usable listings per search.
 export const FINDALL_GENERATOR = envStr("FINDALL_GENERATOR", "base")
 export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 10)
 // NOTE: production has always run "base" here (the env var is unset on Vercel

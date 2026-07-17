@@ -1,4 +1,4 @@
-// OSM Nominatim geocoding, ported from the FastAPI geocode_service.
+// OSM Nominatim geocoding.
 // Callers must sequence requests (~1/s) per Nominatim's usage policy.
 
 import { CITY, GEO_COUNTRY } from "./config"
