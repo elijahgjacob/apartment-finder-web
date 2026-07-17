@@ -24,7 +24,7 @@ export function Header({ config }: HeaderProps) {
       <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           {config.brand.logoUrl ? (
-            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-7 w-auto" />
+            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-10 w-auto" />
           ) : (
             <span
               className="text-base font-bold tracking-tight"
