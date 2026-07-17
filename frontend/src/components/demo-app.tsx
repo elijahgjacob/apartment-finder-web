@@ -503,7 +503,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                       hoveredId={hoveredId}
                       onHover={(id) => setHoveredId(id)}
                       onLeave={() => setHoveredId(null)}
-                      streaming={false}
+                      // While a run is in flight, saved cards stay inert too: a
+                      // candidate saved mid-run must not be clickable until the
+                      // FindAll run completes.
+                      streaming={streaming}
                       hiddenLowScoreCount={0}
                       hiddenStaleCount={0}
                       hiddenSpamCount={0}
