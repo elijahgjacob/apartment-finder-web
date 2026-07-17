@@ -24,7 +24,7 @@ export function Header({ config }: HeaderProps) {
       <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
           {config.brand.logoUrl ? (
-            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-7 w-auto" />
+            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-10 w-auto" />
           ) : (
             <span
               className="text-base font-bold tracking-tight"
@@ -33,13 +33,6 @@ export function Header({ config }: HeaderProps) {
               {config.brand.name}
             </span>
           )}
-          <span
-            className="hidden sm:inline-flex items-center gap-1.5 pl-4 border-l text-xs font-bold uppercase tracking-[0.12em]"
-            style={{ borderColor: Z.border, color: Z.textMid }}
-          >
-            <SparkleIcon size={11} color={Z.blue} />
-            {config.brand.tagline}
-          </span>
         </div>
         <a
           href="/docs"

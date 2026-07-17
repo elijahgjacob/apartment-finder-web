@@ -52,10 +52,13 @@ export function SearchStatus({
           <path d="M20 6 9 17l-5-5" />
         </svg>
       ) : (
-        <span
-          className="inline-block w-4 h-4 rounded-full animate-spin shrink-0"
-          style={{ border: `2px solid ${Z.blueBorder}`, borderTopColor: Z.blue }}
-        />
+        // The app mark's unit grid, scanning: an orange pulse sweeps unit to
+        // unit while FindAll checks candidates (see .af-scan-cell keyframes).
+        <span className="grid grid-cols-3 gap-[2px] shrink-0" aria-hidden>
+          {Array.from({ length: 9 }, (_, i) => (
+            <span key={i} className="af-scan-cell" style={{ animationDelay: `${i * 120}ms` }} />
+          ))}
+        </span>
       )}
 
       <div className="flex-1 min-w-0">
@@ -64,7 +67,7 @@ export function SearchStatus({
         </div>
         {!isDone && (
           <div className="text-[11px] mt-0.5" style={{ color: Z.textMid, fontFamily: FONT_BODY }}>
-            This can take a few minutes — results appear as they&apos;re verified.
+            This can take a few minutes. Results appear as they&apos;re verified.
           </div>
         )}
       </div>

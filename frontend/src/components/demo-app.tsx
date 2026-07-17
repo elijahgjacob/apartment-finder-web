@@ -10,6 +10,7 @@ import { Footer } from "@/components/layout/footer"
 import { SearchBar } from "@/components/search/search-bar"
 import { SearchStatus } from "@/components/search/search-status"
 import { SearchSuggestions } from "@/components/search/search-suggestions"
+import { DiscoveryField } from "@/components/search/discovery-field"
 import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
@@ -169,7 +170,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const {
     query, setQuery,
-    reasoning, streaming, listings, error, done, phase, startedAt,
+    reasoning, streaming, listings, error, done, phase, startedAt, progress,
     fraudChecking, runFraudCheck,
     startSearch,
   } = useSearch()
@@ -506,6 +507,9 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
                 <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
                 <div ref={cardListRef}>
+                  {streaming && visibleListings.length === 0 && (
+                    <DiscoveryField progress={progress} phase={phase?.key ?? "discover"} />
+                  )}
                   <ListingGrid
                     listings={visibleListings}
                     city={city}
@@ -542,42 +546,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               />
             )}
           </>
-        ) : (
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-            <FeatureCard
-              title="Every apartment links to a real listing"
-              body="Each result opens the actual unit's listing page: a specific street address, not a search page or an invented result you can't rent."
-            />
-            <FeatureCard
-              title="Checked against your must-haves"
-              body="Every place is verified one-by-one against what you asked for (beds, budget, pets, parking) and shows which of your requirements it actually meets."
-            />
-            <FeatureCard
-              title="Keep watching for new units"
-              body="Leave a search running and fresh apartments that fit your criteria stream in on their own, highlighted the moment they appear."
-            />
-          </section>
-        )}
+        ) : null}
       </main>
 
       <Footer disclaimer={config.brand.disclaimer} />
-    </div>
-  )
-}
-
-function FeatureCard({ title, body }: { title: string; body: string }) {
-  return (
-    <div
-      className="rounded-2xl p-5 text-left"
-      style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}
-    >
-      <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-1.5" style={{ color: Z.blue }}>
-        Built-in
-      </div>
-      <h3 className="text-base font-medium mb-1" style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
-        {title}
-      </h3>
-      <p className="text-sm leading-relaxed" style={{ color: Z.textMid }}>{body}</p>
     </div>
   )
 }

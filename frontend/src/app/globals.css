@@ -3,6 +3,52 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
+/* Discovery-running visual: the app mark's unit grid with an orange pulse
+   sweeping unit to unit (FindAll checking apartments). Pure CSS on the GPU
+   compositor: no re-renders, no bundle cost. Stagger via animation-delay. */
+@keyframes af-unit-scan {
+  0%, 60%, 100% { background-color: #E8C4AC; }
+  15%, 35% { background-color: #FB631B; }
+}
+.af-scan-cell {
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background-color: #E8C4AC;
+  animation: af-unit-scan 1.35s cubic-bezier(0.8, 0.45, 0.2, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-scan-cell { animation: none; background-color: #FB631B; }
+}
+
+/* Discovery field: a block of unit cells swept by a scan pulse while FindAll
+   evaluates candidates. Idle cells breathe grey -> neural; verified cells lock
+   to signal orange with a pop. All compositor-only CSS. */
+@keyframes af-field-scan {
+  0%, 70%, 100% { background-color: #EEEEEE; }
+  20%, 45% { background-color: #D8D0BF; }
+}
+.af-field-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background-color: #EEEEEE;
+  animation: af-field-scan 2.2s cubic-bezier(0.8, 0.45, 0.2, 1) infinite;
+}
+@keyframes af-cell-pop {
+  0% { transform: scale(0.4); }
+  60% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.af-field-cell.af-verified {
+  background-color: #FB631B;
+  animation: af-cell-pop 0.5s cubic-bezier(0.8, 0.45, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .af-field-cell { animation: none; }
+  .af-field-cell.af-verified { animation: none; background-color: #FB631B; }
+}
+
 .dark-popup .leaflet-popup-content-wrapper {
   background: oklch(0.205 0 0);
   border: 1px solid oklch(1 0 0 / 10%);
