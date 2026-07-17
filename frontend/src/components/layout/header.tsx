@@ -33,13 +33,6 @@ export function Header({ config }: HeaderProps) {
               {config.brand.name}
             </span>
           )}
-          <span
-            className="hidden sm:inline-flex items-center gap-1.5 pl-4 border-l text-xs font-bold uppercase tracking-[0.12em]"
-            style={{ borderColor: Z.border, color: Z.textMid }}
-          >
-            <SparkleIcon size={11} color={Z.blue} />
-            {config.brand.tagline}
-          </span>
         </div>
         <a
           href="/docs"

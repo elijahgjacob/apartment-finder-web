@@ -546,42 +546,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               />
             )}
           </>
-        ) : (
-          <section className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-2">
-            <FeatureCard
-              title="Every apartment links to a real listing"
-              body="Each result opens the actual unit's listing page: a specific street address, not a search page or an invented result you can't rent."
-            />
-            <FeatureCard
-              title="Checked against your must-haves"
-              body="Every place is verified one-by-one against what you asked for (beds, budget, pets, parking) and shows which of your requirements it actually meets."
-            />
-            <FeatureCard
-              title="Keep watching for new units"
-              body="Leave a search running and fresh apartments that fit your criteria stream in on their own, highlighted the moment they appear."
-            />
-          </section>
-        )}
+        ) : null}
       </main>
 
       <Footer disclaimer={config.brand.disclaimer} />
-    </div>
-  )
-}
-
-function FeatureCard({ title, body }: { title: string; body: string }) {
-  return (
-    <div
-      className="rounded-2xl p-5 text-left"
-      style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}
-    >
-      <div className="text-[11px] uppercase tracking-[0.14em] font-bold mb-1.5" style={{ color: Z.blue }}>
-        Built-in
-      </div>
-      <h3 className="text-base font-medium mb-1" style={{ color: Z.text, fontFamily: FONT_HEADING, letterSpacing: "-0.01em" }}>
-        {title}
-      </h3>
-      <p className="text-sm leading-relaxed" style={{ color: Z.textMid }}>{body}</p>
     </div>
   )
 }
