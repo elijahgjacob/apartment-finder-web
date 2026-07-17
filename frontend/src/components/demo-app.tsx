@@ -110,7 +110,10 @@ function withSqft(requirements: string, sqft: number | null): string | undefined
 
 function defaultBudgetForBeds(beds: number | null, floors: Record<string, number>, fallback: number): number {
   const floor = realisticFloor(beds, floors)
-  return floor != null ? Math.round(floor * 1.3 / 250) * 250 : fallback
+  // Default budgets err on the HIGH side (1.5x the entry-level floor): a
+  // too-low default filters out most real inventory, while a generous one
+  // still ranks cheaper units first (price fit is a scoring signal).
+  return floor != null ? Math.round(floor * 1.5 / 250) * 250 : fallback
 }
 
 function CenteredScreen({ title, body, color }: { title: string; body: string; color?: string }) {
