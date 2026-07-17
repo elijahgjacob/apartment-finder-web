@@ -21,10 +21,10 @@ export function Header({ config }: HeaderProps) {
       className="sticky top-0 z-20 backdrop-blur"
       style={{ backgroundColor: "rgba(255,255,255,0.92)", borderBottom: `1px solid ${Z.border}` }}
     >
-      <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-4 min-w-0">
           {config.brand.logoUrl ? (
-            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-10 w-auto" />
+            <img src={config.brand.logoUrl} alt={config.brand.name} className="h-8 sm:h-10 w-auto" />
           ) : (
             <span
               className="text-base font-bold tracking-tight"
@@ -36,11 +36,12 @@ export function Header({ config }: HeaderProps) {
         </div>
         <a
           href="/docs"
-          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:brightness-95"
+          className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:brightness-95 whitespace-nowrap shrink-0"
           style={{ color: Z.blueDark, backgroundColor: Z.blueSoft, border: `1px solid ${Z.blueBorder}` }}
         >
           <SparkleIcon size={11} color={Z.blue} />
-          How this was built →
+          <span className="hidden sm:inline">How this was built →</span>
+          <span className="sm:hidden">How it&apos;s built →</span>
         </a>
       </div>
     </header>

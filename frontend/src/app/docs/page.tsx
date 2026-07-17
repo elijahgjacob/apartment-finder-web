@@ -106,17 +106,19 @@ function ConfigTable() {
   ]
 
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, margin: "0 0 1.25rem" }}>
-      <tbody>
-        {rows.map(([label, value, env]) => (
-          <tr key={label} style={{ borderTop: `1px solid ${Z.border}` }}>
-            <td style={{ padding: "8px 12px 8px 0", color: Z.text, fontWeight: 600, whiteSpace: "nowrap" }}>{label}</td>
-            <td style={{ padding: "8px 12px", color: Z.textSoft, fontFamily: FONT_MONO, fontSize: 13 }}>{value}</td>
-            <td style={{ padding: "8px 0", textAlign: "right" }}><Code>{env}</Code></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div style={{ overflowX: "auto", margin: "0 0 1.25rem" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+        <tbody>
+          {rows.map(([label, value, env]) => (
+            <tr key={label} style={{ borderTop: `1px solid ${Z.border}` }}>
+              <td style={{ padding: "8px 12px 8px 0", color: Z.text, fontWeight: 600 }}>{label}</td>
+              <td style={{ padding: "8px 12px", color: Z.textSoft, fontFamily: FONT_MONO, fontSize: 13 }}>{value}</td>
+              <td style={{ padding: "8px 0", textAlign: "right" }}><Code>{env}</Code></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
@@ -125,11 +127,11 @@ export default function DocsPage() {
     <div style={{ minHeight: "100vh", backgroundColor: Z.bgPage, color: Z.text, fontFamily: FONT_BODY }}>
       <header style={{ borderBottom: `1px solid ${Z.border}` }}>
         <div style={{ maxWidth: 760, margin: "0 auto", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
             <img src="/parallel-lockup.svg" alt="Parallel" style={{ height: 20, width: "auto", display: "block" }} />
-            <span style={{ fontSize: 12, fontWeight: 500, color: Z.textMid, fontFamily: FONT_MONO, textTransform: "uppercase", letterSpacing: "0.06em" }}>How this was built</span>
+            <span className="hidden sm:inline" style={{ fontSize: 12, fontWeight: 500, color: Z.textMid, fontFamily: FONT_MONO, textTransform: "uppercase", letterSpacing: "0.06em" }}>How this was built</span>
           </div>
-          <a href="/" style={{ fontSize: 13, fontWeight: 600, color: Z.blueDark, textDecoration: "none" }}>back to search</a>
+          <a href="/" style={{ fontSize: 13, fontWeight: 600, color: Z.blueDark, textDecoration: "none", whiteSpace: "nowrap" }}>back to search</a>
         </div>
       </header>
 
