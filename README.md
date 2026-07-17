@@ -76,8 +76,7 @@ apartment-finder-web/
 │   │   │   └── api/             # Serverless API routes
 │   │   │       ├── config/      # App config (env-driven)
 │   │   │       ├── search/      # FindAll: create / poll / enrich / finalize
-│   │   │       ├── verify/      # Task API fraud check: create / poll
-│   │   │       └── debug/       # Stub for the /docs live tab
+│   │   │       └── verify/      # Task API fraud check: create / poll
 │   │   ├── components/          # UI components
 │   │   ├── hooks/               # use-search (search state machine), use-saved-targets
 │   │   ├── lib/
@@ -87,7 +86,6 @@ apartment-finder-web/
 │   ├── public/
 │   ├── next.config.ts
 │   └── package.json
-├── backend/                     # Legacy FastAPI implementation (unused by the app)
 └── README.md
 ```
 

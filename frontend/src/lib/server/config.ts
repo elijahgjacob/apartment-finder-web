@@ -22,7 +22,6 @@ export const MAP_CENTER_LNG = envNum("MAP_CENTER_LNG", REFERENCE_POINT_LNG)
 export const MAP_ZOOM = envNum("MAP_ZOOM", 13)
 
 export const DEFAULT_BUDGET = envNum("SEARCH_BUDGET", 6000)
-export const DEFAULT_QUERY = envStr("SEARCH_QUERY", `apartments for rent in ${CITY_SHORT}`)
 
 export const LISTING_SITES = envStr(
   "LISTING_SITES",
@@ -45,11 +44,7 @@ export const GEO_COUNTRY = envStr("GEO_COUNTRY", "us")
 
 export const APP_TITLE = envStr("APP_TITLE", "Bay Area Apartment Finder")
 export const BRAND_NAME = envStr("BRAND_NAME", "Apartment Finder")
-export const BRAND_TAGLINE = envStr("BRAND_TAGLINE", "AI Apartment Search")
 export const BRAND_LOGO_URL = envStr("BRAND_LOGO_URL", "/app-logo.svg")
-export const BRAND_DISCLAIMER = envStr(
-  "BRAND_DISCLAIMER", "Powered by Parallel Web Systems · parallel.ai",
-)
 
 export const SUGGESTIONS = envStr(
   "SEARCH_SUGGESTIONS",
@@ -95,4 +90,9 @@ export const STALE_DIRECT_DAYS = envNum("STALE_DIRECT_DAYS", 45)
 //   more listings per search — at some added discovery/enrichment time.
 export const FINDALL_GENERATOR = envStr("FINDALL_GENERATOR", "base")
 export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 10)
-export const FINDALL_ENRICH_PROCESSOR = envStr("FINDALL_ENRICH_PROCESSOR", "core")
+// NOTE: production has always run "base" here (the env var is unset on Vercel
+// and the old code read the env directly with a "base" fallback, ignoring this
+// constant's former "core" default). Kept at "base" so cleanup changes no
+// behavior; bump the env var to "core" deliberately if extraction quality
+// warrants the extra latency.
+export const FINDALL_ENRICH_PROCESSOR = envStr("FINDALL_ENRICH_PROCESSOR", "base")

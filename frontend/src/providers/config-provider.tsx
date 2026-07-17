@@ -11,10 +11,6 @@ type ConfigState = {
 
 const ConfigContext = createContext<ConfigState>({ config: null, loading: false, error: null })
 
-export function useAppConfig() {
-  return useContext(ConfigContext).config
-}
-
 export function useConfigState() {
   return useContext(ConfigContext)
 }

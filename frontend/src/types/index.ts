@@ -61,12 +61,9 @@ export type AppConfig = {
   mapCenter: { lat: number; lng: number }
   mapZoom: number
   defaultBudget: number
-  defaultQuery: string
   brand: {
     name: string
-    tagline: string
     logoUrl: string
-    disclaimer: string
   }
   suggestions: string[]
   rentFloors: Record<string, number>
@@ -76,12 +73,6 @@ export type AppConfig = {
     directDays: number
   }
 }
-
-export type TaskEvent =
-  | { event: "status"; status: string }
-  | { event: "reasoning"; text: string }
-  | { event: "listing"; listing: Listing }
-  | { event: "error"; message: string }
 
 export type StepStatus = "pending" | "active" | "done" | "error"
 

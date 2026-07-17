@@ -4,7 +4,7 @@
 
 import { cityByName } from "./bay-area"
 
-export function neighborhoodsForCity(city: string): string[] {
+function neighborhoodsForCity(city: string): string[] {
   return cityByName(city)?.neighborhoods.map((n) => n.name) ?? []
 }
 

@@ -60,7 +60,7 @@ function addressFromName(name: string): string | null {
   return null
 }
 
-export function normalizeAddress(addr: string): string {
+function normalizeAddress(addr: string): string {
   let s = addr.toLowerCase().trim()
   s = s.replace(/\s*(apt|unit|suite|ste|#)\s*[\w-]+/gi, "")
   s = s.replace(/,?\s*[A-Za-z\s]+,\s*[A-Z]{2}\s*\d{5}(-\d{4})?$/, "")
@@ -110,7 +110,7 @@ export interface ParseOptions {
 // A wide rent range in the extracted evidence ("$1,255 - $2,980") is the
 // signature of a multi-unit building or category page, not a single unit.
 // Lease-term variance on one unit stays narrow, so only flag ratios ≥ 1.4.
-export function hasWideRentRange(strings: (string | null | undefined)[]): boolean {
+function hasWideRentRange(strings: (string | null | undefined)[]): boolean {
   for (const s of strings) {
     if (!s) continue
     const m = s.match(/\$?\s*(\d[\d,]{2,})\s*(?:-|–|—|to)\s*\$?\s*(\d[\d,]{2,})/)
@@ -158,7 +158,7 @@ export interface ParsedListing {
   score: number
 }
 
-export function candidateToListing(
+function candidateToListing(
   candidate: Candidate,
   opts: ParseOptions = {},
   drops?: Record<string, number>,
@@ -482,8 +482,4 @@ export function bedroomBounds(query: string): { min: number | null; max: number 
   }
   const m = query.match(/(\d+)\s*(?:br|bed|bedroom)/i)
   return m ? { min: parseInt(m[1], 10), max: null } : { min: null, max: null }
-}
-
-export function extractMinBeds(query: string): number | null {
-  return bedroomBounds(query).min
 }

@@ -3,7 +3,7 @@
 
 import {
   BLOCKED_DOMAINS, CITY_SHORT,
-  FINDALL_GENERATOR, FINDALL_MATCH_LIMIT,
+  FINDALL_GENERATOR, FINDALL_MATCH_LIMIT, FINDALL_ENRICH_PROCESSOR,
 } from "./config"
 
 const API_BASE = process.env.PARALLEL_API_BASE ?? "https://api.parallel.ai"
@@ -63,7 +63,7 @@ function matchConditions(minBeds: number | null, budget: number, city: string) {
 // ── Enrichment field definitions ─────────────────────────────────────────
 // Entity → Action → Specifics → Error handling; "" is the unknown sentinel.
 
-export const ENRICHMENTS: { name: string; description: string }[] = [
+const ENRICHMENTS: { name: string; description: string }[] = [
   { name: "street_address", description:
       "Entity: this rental listing's unit address. " +
       "Action: extract the exact street address as written on the page. " +
@@ -182,7 +182,7 @@ export const ENRICHMENTS: { name: string; description: string }[] = [
 
 // FindAll returns only match-condition fields inline; the per-listing facts
 // come from a dedicated enrichment pass whose schema mirrors ENRICHMENTS.
-export function enrichmentOutputSchema() {
+function enrichmentOutputSchema() {
   const properties: Record<string, { type: string; description: string }> = {}
   for (const e of ENRICHMENTS) {
     properties[e.name] = { type: "string", description: e.description }
@@ -293,7 +293,7 @@ export async function findallEnrich(findallId: string): Promise<void> {
   await parallelFetch(`/v1beta/findall/runs/${findallId}/enrich`, {
     method: "POST",
     body: JSON.stringify({
-      processor: process.env.FINDALL_ENRICH_PROCESSOR ?? "base",
+      processor: FINDALL_ENRICH_PROCESSOR,
       output_schema: { type: "json", json_schema: enrichmentOutputSchema() },
     }),
   })
