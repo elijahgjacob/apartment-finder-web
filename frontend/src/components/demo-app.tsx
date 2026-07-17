@@ -11,6 +11,7 @@ import { SearchBar } from "@/components/search/search-bar"
 import { SearchStatus } from "@/components/search/search-status"
 import { SearchSuggestions } from "@/components/search/search-suggestions"
 import { DiscoveryField } from "@/components/search/discovery-field"
+import { searchAudio } from "@/lib/search-audio"
 import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
@@ -178,6 +179,39 @@ function DemoAppInner({ config }: { config: AppConfig }) {
     startSearch,
   } = useSearch()
 
+  // Procedural "AI searching" sound. Default on; preference persists.
+  const [soundOn, setSoundOn] = useState(true)
+  useEffect(() => {
+    if (localStorage.getItem("apartment-finder-sound") === "off") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSoundOn(false)
+      searchAudio.setMuted(true)
+    }
+  }, [])
+  const toggleSound = useCallback(() => {
+    setSoundOn((on) => {
+      const next = !on
+      searchAudio.setMuted(!next)
+      localStorage.setItem("apartment-finder-sound", next ? "on" : "off")
+      return next
+    })
+  }, [])
+  // Blip each time a new candidate verifies; stop (with a chime on success)
+  // when the run ends. start() is called from the click handlers so the
+  // AudioContext resumes within a user gesture.
+  const prevMatchedRef = useRef(0)
+  useEffect(() => {
+    if (streaming && progress.matched > prevMatchedRef.current) {
+      for (let n = prevMatchedRef.current; n < progress.matched; n++) searchAudio.tick(n)
+    }
+    prevMatchedRef.current = progress.matched
+  }, [progress.matched, streaming])
+  const wasStreamingRef = useRef(false)
+  useEffect(() => {
+    if (wasStreamingRef.current && !streaming) searchAudio.stop(done)
+    wasStreamingRef.current = streaming
+  }, [streaming, done])
+
   const { saved, isSaved, toggleSave, clearSaved } = useSavedTargets()
   const sources = useSources()
 
@@ -236,6 +270,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     setView("list")
+    searchAudio.start() // within the click gesture, so the audio context resumes
     // Resolve the city from the query text itself, not the (possibly stale)
     // dropdown state, so the objective always matches what the user typed.
     const searchCity = cityInQuery(query) ?? bayCity
@@ -386,6 +421,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             suggestions={config.suggestions}
             onSelect={(s) => {
               setQuery(s)
+              searchAudio.start() // within the click gesture
               // Parse everything from the clicked suggestion itself. State
               // (city, effectiveBudget) still reflects the previous query
               // during this event, so resolve the city from `s` directly —
@@ -431,7 +467,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
         {hasActivity ? (
           <>
             {!showingSaved && (
-              <SearchStatus phase={phase} streaming={streaming} startedAt={startedAt} />
+              <SearchStatus phase={phase} streaming={streaming} startedAt={startedAt} soundOn={soundOn} onToggleSound={toggleSound} />
             )}
             <div className="mb-4 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
               <div className="flex-1">
