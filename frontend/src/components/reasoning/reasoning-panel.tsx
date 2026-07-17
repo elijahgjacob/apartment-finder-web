@@ -4,75 +4,85 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import { Z, FONT_HEADING, FONT_MONO } from "@/lib/palette"
 import { ProcessTimeline } from "./process-timeline"
 import type { ProcessStep } from "@/types"
+import type { SearchPhase } from "@/hooks/use-search"
 
-function parseReasoningToSteps(text: string, streaming: boolean, done: boolean): ProcessStep[] {
+// The timeline is driven by the run's real state (phase + live metrics), not by
+// regex-scraping the log. Only the two phases that actually take time get their
+// own step, each with a live subtitle so you can watch it advance:
+//   discover  — FindAll searches the web and verifies candidates (the long one)
+//   extract   — enrichment pulls structured fields per listing (also long)
+//   finalize  — geocode + score (quick)
+// The old "Verifying matches" (concurrent with discovery) and "Spam & quality
+// check" (a separate, user-triggered fraud pass) were pass-through stages that
+// only ever flashed green on completion, so they're gone.
+const PHASE_STEP_INDEX: Record<SearchPhase["key"], number> = {
+  discover: 1,
+  extract: 2,
+  finalize: 3,
+  done: 4,
+}
+
+type Progress = { generated: number; matched: number; ready: number; total: number }
+
+function buildSteps(
+  phase: SearchPhase | null,
+  progress: Progress,
+  reasoning: string,
+  streaming: boolean,
+  done: boolean,
+): ProcessStep[] {
   const steps: ProcessStep[] = [
     { id: "understand", title: "Understanding your search", status: "pending" },
-    { id: "discover", title: "Discovering rental listings", status: "pending" },
-    { id: "verify", title: "Verifying matches", status: "pending" },
-    { id: "enrich", title: "Extracting structured details", status: "pending" },
-    { id: "quality", title: "Spam & quality check", status: "pending" },
+    { id: "discover", title: "Searching listings across the web", status: "pending" },
+    { id: "extract", title: "Extracting price, beds & details", status: "pending" },
+    { id: "finalize", title: "Mapping & scoring", status: "pending" },
     { id: "ready", title: "Ready", status: "pending" },
   ]
 
-  const objMatch = text.match(/Objective:\s*([^\n]+)/)
-  if (objMatch) {
-    steps[0].status = "done"
-    steps[0].subtitle = objMatch[1].trim()
+  // How far along the run is. Understanding is instant, so once a search has
+  // started (phase set) it's already at least at the discover step.
+  const activeIdx = done ? 4 : phase ? PHASE_STEP_INDEX[phase.key] : 1
+  for (let i = 0; i < steps.length; i++) {
+    if (done || i < activeIdx) steps[i].status = "done"
+    else if (i === activeIdx) steps[i].status = "active"
+    else steps[i].status = "pending"
   }
-  const budgetMatch = text.match(/Budget:\s*\$([\d,]+)/)
-  const bedsMatch = text.match(/(\d+)\+\s*beds/)
-  if (steps[0].subtitle && (budgetMatch || bedsMatch)) {
+
+  // Understanding: surface the parsed objective + constraints from the log.
+  const objMatch = reasoning.match(/Objective:\s*([^\n]+)/)
+  if (objMatch) steps[0].subtitle = objMatch[1].trim()
+  const budgetMatch = reasoning.match(/Budget:\s*\$([\d,]+)/)
+  const bedsMatch = reasoning.match(/(\d+)\+\s*beds/)
+  if (budgetMatch || bedsMatch) {
     const parts: string[] = []
     if (bedsMatch) parts.push(`${bedsMatch[1]}+ beds`)
     if (budgetMatch) parts.push(`under $${budgetMatch[1]}`)
     steps[0].detail = parts.join(" · ")
   }
 
-  if (/Starting entity discovery/.test(text)) steps[1].status = "active"
+  // Discover: live candidate/verified counts as FindAll streams them.
+  steps[1].subtitle = progress.generated > 0
+    ? `${progress.generated} listing${progress.generated === 1 ? "" : "s"} found · ${progress.matched} match your criteria`
+    : "Scanning listing sites across the web"
 
-  const progressMatches = [...text.matchAll(/Progress:\s*(\d+)\s*candidates,\s*(\d+)\s*verified/g)]
-  if (progressMatches.length > 0) {
-    steps[1].status = "done"
-    steps[2].status = "active"
-    const last = progressMatches[progressMatches.length - 1]
-    const candidates = parseInt(last[1])
-    const verified = parseInt(last[2])
-    steps[2].progress = { matched: verified, total: candidates }
-    steps[2].subtitle = `${verified} verified · ${candidates} candidates checked`
+  // Extract: enrichment ripens gradually; show ready/total + a real fill bar.
+  const total = progress.total || 0
+  steps[2].subtitle = total > 0
+    ? `${progress.ready} of ${total} listing${total === 1 ? "" : "s"} ready`
+    : "Pulling structured fields from each listing page"
+  if (total > 0) steps[2].progress = { matched: progress.ready, total }
+
+  steps[3].subtitle = "Placing results on the map and scoring by fit"
+
+  // Ready: prefer the final count the log reports; fall back to the metric.
+  const doneMatch = reasoning.match(/Done\.\s*(\d+)\s*listings found/)
+  if (done) {
+    const n = doneMatch ? parseInt(doneMatch[1]) : progress.ready
+    steps[4].subtitle = `${n} listing${n === 1 ? "" : "s"} ready for review`
   }
 
-  if (/Discovery done/.test(text)) {
-    steps[1].status = "done"
-    steps[2].status = "done"
-    const m = text.match(/Discovery done:\s*(\d+)\s*verified/)
-    if (m) steps[2].subtitle = `${m[1]} verified across the web`
-  }
-
-  const parsingMatch = text.match(/Parsing\s*(\d+)\s*matches/)
-  if (parsingMatch) {
-    steps[3].status = "active"
-    steps[3].subtitle = `Pulling structured fields from ${parsingMatch[1]} listing pages`
-  }
-
-  const spamMatch = text.match(/Spam-scoring\s*(\d+)/)
-  if (spamMatch) {
-    steps[3].status = "done"
-    steps[4].status = "active"
-    steps[4].subtitle = `Classifying ${spamMatch[1]} untrusted-source listings`
-  }
-
-  const savedMatch = text.match(/Done\.\s*(\d+)\s*listings saved/)
-  if (savedMatch) {
-    for (let i = 0; i < 5; i++) if (steps[i].status !== "error") steps[i].status = "done"
-    steps[5].status = "done"
-    steps[5].subtitle = `${savedMatch[1]} listings ready for review`
-  } else if (done) {
-    for (const s of steps) if (s.status === "pending" || s.status === "active") s.status = "done"
-    steps[5].status = "done"
-  }
-
-  if (/error|failed/i.test(text) && !done && !streaming) {
+  // A hard failure leaves the active step mid-flight; mark it errored.
+  if (/error|failed/i.test(reasoning) && !done && !streaming) {
     for (const s of steps) if (s.status === "active") s.status = "error"
   }
 
@@ -83,16 +93,21 @@ interface ReasoningPanelProps {
   reasoning: string
   streaming: boolean
   done: boolean
+  phase: SearchPhase | null
+  progress: Progress
 }
 
-export function ReasoningPanel({ reasoning, streaming, done }: ReasoningPanelProps) {
+export function ReasoningPanel({ reasoning, streaming, done, phase, progress }: ReasoningPanelProps) {
   const [showRaw, setShowRaw] = useState(false)
   const rawRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (rawRef.current) rawRef.current.scrollTop = rawRef.current.scrollHeight
   }, [reasoning, showRaw])
 
-  const steps = useMemo(() => parseReasoningToSteps(reasoning, streaming, done), [reasoning, streaming, done])
+  const steps = useMemo(
+    () => buildSteps(phase, progress, reasoning, streaming, done),
+    [phase, progress, reasoning, streaming, done],
+  )
   const hasActivity = streaming || reasoning.length > 0 || done
 
   return (

@@ -573,7 +573,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
                 {/* On mobile, results come first; the process log follows. */}
                 <div className="order-2 lg:order-1 min-w-0">
-                  <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
+                  <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} phase={phase} progress={progress} />
                 </div>
                 <div ref={cardListRef} className="order-1 lg:order-2 min-w-0">
                   {/* While discovery runs with nothing to show, the field IS the
