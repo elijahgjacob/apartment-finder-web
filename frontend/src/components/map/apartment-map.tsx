@@ -24,16 +24,19 @@ function priceLabel(l: Listing): string {
   return `$${l.price}`
 }
 
-function makePriceTag(l: Listing, hovered: boolean) {
-  const color = markerColor(l.score)
-  const label = priceLabel(l)
+function makePriceTag(l: Listing, hovered: boolean, saved = false) {
+  // Saved targets are pinned in brand orange with a star so the shortlist
+  // stands out from score-colored result tags; results keep score coloring.
+  const color = saved ? Z_BLUE : markerColor(l.score)
+  const label = saved ? `★ ${priceLabel(l)}` : priceLabel(l)
+  const filled = saved || hovered
   const w = Math.max(56, Math.ceil(label.length * 7.5) + 20)
   const h = 26
   return L.divIcon({
     className: "zillow-price-tag",
     html: `<div style="
-        background:${hovered ? color : "white"};
-        color:${hovered ? "white" : color};
+        background:${filled ? color : "white"};
+        color:${filled ? "white" : color};
         border:2px solid ${color};
         width:100%;
         height:100%;
@@ -90,10 +93,11 @@ type MapProps = {
   config: AppConfig | null
   hoveredId?: string | null
   onMarkerClick?: (id: string) => void
+  savedIds?: Set<string>
   height?: number
 }
 
-export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, height = 600 }: MapProps) {
+export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, savedIds, height = 600 }: MapProps) {
   const mapRef = useRef<L.Map | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const markersRef = useRef<Map<string, L.Marker>>(new Map())
@@ -145,7 +149,7 @@ export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, heigh
       if (l.lat == null || l.lng == null) continue
       const pos = displayCoords(l)
       bounds.push(pos)
-      const marker = L.marker(pos, { icon: makePriceTag(l, false) })
+      const marker = L.marker(pos, { icon: makePriceTag(l, false, savedIds?.has(l.id)) })
       marker.addTo(layerRef.current!)
       // Listing text is scraped/LLM-extracted (untrusted) and Leaflet injects
       // this string as raw HTML — escape every interpolated field.
@@ -171,20 +175,20 @@ export function ApartmentMap({ listings, config, hoveredId, onMarkerClick, heigh
     } else if (bounds.length === 1) {
       mapRef.current.setView(bounds[0], 14)
     }
-  }, [listings, onMarkerClick])
+  }, [listings, onMarkerClick, savedIds])
 
   useEffect(() => {
     for (const [id, marker] of markersRef.current.entries()) {
       const l = listings.find((x) => x.id === id)
       if (!l) continue
-      marker.setIcon(makePriceTag(l, id === hoveredId))
+      marker.setIcon(makePriceTag(l, id === hoveredId, savedIds?.has(id)))
       if (id === hoveredId) {
         marker.setZIndexOffset(1000)
       } else {
         marker.setZIndexOffset(0)
       }
     }
-  }, [hoveredId, listings])
+  }, [hoveredId, listings, savedIds])
 
   return (
     <div
