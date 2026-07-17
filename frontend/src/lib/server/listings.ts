@@ -211,6 +211,25 @@ export function candidateToListing(
     }
   }
 
+  // Pre-enrichment fallback: FindAll candidate names often embed the facts
+  // ("2500 Mission St Apt 301, $4,550, 2 bedrooms, Mission"), so parse price
+  // and beds out of the name/description rather than showing "? bd" while
+  // enrichment is still running. Enriched values (above) always win. The $
+  // anchor keeps street numbers from being mistaken for a price.
+  const nameAndDesc = `${name} ${description}`
+  if (price == null) {
+    const m = nameAndDesc.match(/\$\s*([\d,]{3,})(?:\s*\/\s*mo(?:nth)?)?/i)
+    if (m) price = parseIntLoose(m[1])
+  }
+  if (beds == null) {
+    if (/\bstudio\b/i.test(nameAndDesc)) {
+      beds = 0
+    } else {
+      const m = nameAndDesc.match(/\b(\d{1,2})\s*(?:bed(?:room)?s?|br|bd)\b/i)
+      if (m) beds = parseInt(m[1], 10)
+    }
+  }
+
   if (price != null && (price < 500 || price > 50000)) price = null
   if (beds != null && (beds < 0 || beds > 10)) beds = null
 
