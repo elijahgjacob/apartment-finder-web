@@ -66,6 +66,15 @@ Set `PARALLEL_API_KEY` in the project's environment variables.
 cd frontend && npx vercel deploy --prod
 ```
 
+> [!IMPORTANT]
+> The `/api/search` and `/api/verify` routes are **not authenticated**. Every
+> request spends your Parallel quota (FindAll runs and Task API calls). This is
+> fine for local dev and a private demo, but if you deploy this publicly, anyone
+> with the URL can run searches on your key. Before a public deploy, put the app
+> behind auth (Vercel password protection, Vercel Authentication, or your own
+> middleware) and add rate limiting. Keep `PARALLEL_API_KEY` in server-side
+> environment variables only — never a `NEXT_PUBLIC_` variable.
+
 ## Project Structure
 
 ```
