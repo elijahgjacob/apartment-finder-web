@@ -10,6 +10,7 @@ import { Footer } from "@/components/layout/footer"
 import { SearchBar } from "@/components/search/search-bar"
 import { SearchStatus } from "@/components/search/search-status"
 import { SearchSuggestions } from "@/components/search/search-suggestions"
+import { DiscoveryField } from "@/components/search/discovery-field"
 import { StatsBar } from "@/components/stats/stats-bar"
 import { ReasoningPanel } from "@/components/reasoning/reasoning-panel"
 import { ListingGrid } from "@/components/listings/listing-grid"
@@ -169,7 +170,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
   const {
     query, setQuery,
-    reasoning, streaming, listings, error, done, phase, startedAt,
+    reasoning, streaming, listings, error, done, phase, startedAt, progress,
     fraudChecking, runFraudCheck,
     startSearch,
   } = useSearch()
@@ -506,6 +507,9 @@ function DemoAppInner({ config }: { config: AppConfig }) {
               <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
                 <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
                 <div ref={cardListRef}>
+                  {streaming && visibleListings.length === 0 && (
+                    <DiscoveryField progress={progress} phase={phase?.key ?? "discover"} />
+                  )}
                   <ListingGrid
                     listings={visibleListings}
                     city={city}

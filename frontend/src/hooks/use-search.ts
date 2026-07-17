@@ -84,7 +84,7 @@ async function verifyListings(
           x.id === l.id ? { ...x, spam_score: score, spam_flags: flags, needs_verification: false } : x,
         ))
         if (score > 0) {
-          say(`  ⚠ ${l.address ?? l.title ?? "listing"} — spam:${score} (${flags.join(", ")})\n`)
+          say(`  ⚠ ${l.address ?? l.title ?? "listing"} · spam:${score} (${flags.join(", ")})\n`)
         }
         return
       }
@@ -116,6 +116,9 @@ export function useSearch() {
   const [done, setDone] = useState(false)
   const [phase, setPhase] = useState<SearchPhase | null>(null)
   const [startedAt, setStartedAt] = useState<number | null>(null)
+  // Live run metrics for the discovery visualization: candidates generated,
+  // verified matches, enriched-and-ready, and total candidates.
+  const [progress, setProgress] = useState({ generated: 0, matched: 0, ready: 0, total: 0 })
   const [fraudChecking, setFraudChecking] = useState(false)
   // Bumped on every new search and on unmount so an abandoned loop exits.
   const genRef = useRef(0)
@@ -140,6 +143,7 @@ export function useSearch() {
     setStreaming(true)
     setPhase({ key: "discover", detail: "Starting…" })
     setStartedAt(Date.now())
+    setProgress({ generated: 0, matched: 0, ready: 0, total: 0 })
 
     const say = (text: string) => { if (live()) setReasoning((p) => p + text) }
     const fail = (msg: string) => {
@@ -247,12 +251,19 @@ export function useSearch() {
 
         if (poll.listings.length) mergeIncoming(poll.listings)
 
+        setProgress({
+          generated: poll.generated,
+          matched: poll.matched,
+          ready: poll.rentPopulated,
+          total: poll.candidateCount,
+        })
+
         if (!enrichStarted) {
           if (poll.generated !== prevGenerated || poll.matched !== prevMatched) {
             say(`Progress: ${poll.generated} found, ${poll.matched} verified\n`)
             setPhase({
               key: "discover",
-              detail: `Verifying candidates — ${poll.generated} found · ${poll.matched} match`,
+              detail: `Verifying candidates · ${poll.generated} found · ${poll.matched} match`,
             })
             prevGenerated = poll.generated
             prevMatched = poll.matched
@@ -264,7 +275,7 @@ export function useSearch() {
             Date.now() - discoverStartedAt > DISCOVER_MAX_WAIT_MS && poll.matched >= 1
           if (poll.state === "completed" || discoverTimedOut) {
             if (discoverTimedOut && poll.state !== "completed") {
-              say(`\nDiscovery slow — proceeding with ${poll.matched} verified so far…\n`)
+              say(`\nDiscovery slow, proceeding with ${poll.matched} verified so far…\n`)
             } else {
               say(`\nVerified ${poll.matched}. Extracting listing details…\n`)
             }
@@ -293,7 +304,7 @@ export function useSearch() {
         const total = poll.candidateCount || 1
         if (poll.rentPopulated !== prevReady) {
           say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
-          setPhase({ key: "extract", detail: `Extracting details — ${poll.rentPopulated}/${total} ready` })
+          setPhase({ key: "extract", detail: `Extracting details · ${poll.rentPopulated}/${total} ready` })
           prevReady = poll.rentPopulated
           lastReadyChangeAt = Date.now()
         }
@@ -319,14 +330,14 @@ export function useSearch() {
         if (!live()) return null
 
         for (const l of fin.listings) {
-          const price = l.price ? `$${l.price.toLocaleString()}/mo` : "—"
+          const price = l.price ? `$${l.price.toLocaleString()}/mo` : "n/a"
           const bd = l.bedrooms != null ? `${l.bedrooms}bd` : "?bd"
-          say(`  + ${l.address ?? "—"} — ${bd} — ${price}\n`)
+          say(`  + ${l.address ?? "no address"} · ${bd} · ${price}\n`)
         }
         return { listings: fin.listings, completed: discoverCompleted }
       }
 
-      fail("Search timed out — please try again")
+      fail("Search timed out. Please try again")
       return null
     }
 
@@ -342,7 +353,7 @@ export function useSearch() {
       // match_limit) is legitimately near-empty, so a second pass just doubles
       // latency for the same answer.
       if (first.completed && result.length < LOW_YIELD_RETRY_THRESHOLD) {
-        say(`\nOnly ${result.length} listing${result.length === 1 ? "" : "s"} so far — retrying discovery once for more…\n`)
+        say(`\nOnly ${result.length} listing${result.length === 1 ? "" : "s"} so far. Retrying discovery once for more…\n`)
         setListings([])
         const retry = await driveRun(2)
         if (!live()) return
@@ -383,7 +394,7 @@ export function useSearch() {
 
   return {
     query, setQuery,
-    reasoning, streaming, listings, error, done, phase, startedAt,
+    reasoning, streaming, listings, error, done, phase, startedAt, progress,
     fraudChecking, runFraudCheck,
     startSearch, setError,
   } as const
