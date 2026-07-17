@@ -339,11 +339,13 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             </span>
           </div>
           <h1
-            className={`font-medium mb-4 max-w-3xl ${hasActivity ? "hidden sm:block" : ""}`}
+            className="font-medium mb-4 max-w-3xl"
             style={{
               fontFamily: FONT_HEADING,
               color: Z.text,
-              fontSize: "clamp(2rem, 5vw, 3.25rem)",
+              // Keep the title on mobile even mid-search, just smaller; the
+              // subheader, pill, and Try chips stay collapsed.
+              fontSize: hasActivity ? "clamp(1.5rem, 5vw, 3.25rem)" : "clamp(2rem, 5vw, 3.25rem)",
               letterSpacing: "-0.03em",
               lineHeight: 1.05,
             }}
