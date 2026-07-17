@@ -333,7 +333,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
       >
         {/* Once a search is active, collapse the hero copy on mobile so results
             aren't pushed two screens down; desktop keeps the full hero. */}
-        <div className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-5 pb-6 sm:pt-14 sm:pb-12" : "pt-14 pb-12"}`}>
+        <div className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-5 pb-4 sm:pt-8 sm:pb-5" : "pt-14 pb-12"}`}>
           {/* Brand credit: a real link to parallel.ai, visible on mobile and
               desktop, including mid-search. */}
           <a
@@ -418,7 +418,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
         </div>
       </section>
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-3 pb-8" : "py-8"}`}>
         {error && (
           <div
             className="rounded-xl p-4 mb-6 text-sm font-medium"
