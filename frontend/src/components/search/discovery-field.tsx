@@ -81,8 +81,11 @@ export function DiscoveryField({
       </div>
 
       <div className="flex items-center justify-between mt-5 px-3">
-        <span className="text-[11px] uppercase tracking-[0.08em]" style={{ color: Z.textFaint, fontFamily: FONT_MONO }}>
+        <span className="hidden sm:inline text-[11px] uppercase tracking-[0.08em]" style={{ color: Z.textFaint, fontFamily: FONT_MONO }}>
           Each cell is a candidate unit · orange = verified match
+        </span>
+        <span className="sm:hidden text-[11px] uppercase tracking-[0.08em]" style={{ color: Z.textFaint, fontFamily: FONT_MONO }}>
+          Orange = verified
         </span>
         <span className="flex items-center gap-2">
           <img src="/parallel-symbol.svg" alt="" width={12} height={12} style={{ display: "block", opacity: 0.55 }} />

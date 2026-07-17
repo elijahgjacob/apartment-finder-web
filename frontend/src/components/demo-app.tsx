@@ -328,8 +328,10 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           borderBottom: `1px solid ${Z.borderSoft}`,
         }}
       >
-        <div className="max-w-6xl mx-auto px-6 pt-14 pb-12">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full mb-5"
+        {/* Once a search is active, collapse the hero copy on mobile so results
+            aren't pushed two screens down; desktop keeps the full hero. */}
+        <div className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-5 pb-6 sm:pt-14 sm:pb-12" : "pt-14 pb-12"}`}>
+          <div className={`${hasActivity ? "hidden sm:inline-flex" : "inline-flex"} items-center gap-1.5 px-3 py-1 rounded-full mb-5`}
             style={{ backgroundColor: Z.bgCard, border: `1px solid ${Z.border}` }}>
             <SparkleIcon size={12} color={Z.blue} />
             <span className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: Z.blueDark }}>
@@ -337,7 +339,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             </span>
           </div>
           <h1
-            className="font-medium mb-4 max-w-3xl"
+            className={`font-medium mb-4 max-w-3xl ${hasActivity ? "hidden sm:block" : ""}`}
             style={{
               fontFamily: FONT_HEADING,
               color: Z.text,
@@ -348,7 +350,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           >
             Find your Bay Area rental in your own words.
           </h1>
-          <p className="text-base sm:text-lg mb-7 max-w-3xl leading-relaxed" style={{ color: Z.textMid }}>
+          <p className={`text-base sm:text-lg mb-7 max-w-3xl leading-relaxed ${hasActivity ? "hidden sm:block" : ""}`} style={{ color: Z.textMid }}>
             Describe what you want like you&apos;d tell a friend. The assistant searches the web
             across San Francisco, the East Bay, and the Peninsula,
             verifies every match against your criteria, and returns each result with cited sources.
@@ -367,6 +369,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             streaming={streaming}
           />
 
+          <div className={hasActivity ? "hidden sm:block" : ""}>
           <SearchSuggestions
             suggestions={config.suggestions}
             onSelect={(s) => {
@@ -399,6 +402,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
             query={query}
             onQueryChange={setQuery}
           />
+          </div>
         </div>
       </section>
 
@@ -505,11 +509,16 @@ function DemoAppInner({ config }: { config: AppConfig }) {
 
             {view === "list" && (
               <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6">
-                <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
-                <div ref={cardListRef}>
-                  {streaming && visibleListings.length === 0 && (
+                {/* On mobile, results come first; the process log follows. */}
+                <div className="order-2 lg:order-1 min-w-0">
+                  <ReasoningPanel reasoning={reasoning} streaming={streaming} done={done} />
+                </div>
+                <div ref={cardListRef} className="order-1 lg:order-2 min-w-0">
+                  {/* While discovery runs with nothing to show, the field IS the
+                      loading state; the grid's skeletons would double it up. */}
+                  {streaming && visibleListings.length === 0 ? (
                     <DiscoveryField progress={progress} phase={phase?.key ?? "discover"} />
-                  )}
+                  ) : (
                   <ListingGrid
                     listings={visibleListings}
                     city={city}
@@ -532,6 +541,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
                     onToggleStale={() => setShowStale((v) => !v)}
                     onToggleSpam={() => setShowSpam((v) => !v)}
                   />
+                  )}
                 </div>
               </div>
             )}
