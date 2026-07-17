@@ -347,7 +347,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
           >
             Find your Bay Area rental in your own words.
           </h1>
-          <p className="text-base sm:text-lg mb-7 max-w-2xl leading-relaxed" style={{ color: Z.textMid }}>
+          <p className="text-base sm:text-lg mb-7 max-w-3xl leading-relaxed" style={{ color: Z.textMid }}>
             Describe what you want like you&apos;d tell a friend. The assistant searches the web
             across San Francisco, the East Bay, and the Peninsula,
             verifies every match against your criteria, and returns each result with cited sources.
