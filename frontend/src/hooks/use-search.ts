@@ -17,26 +17,30 @@ type PollResponse = {
 
 const POLL_MS = 4000
 const MAX_POLLS = 90 // ~6 min hard safety cap
-// Enrichment is the slow phase (a Task per listing) and ripens gradually.
-// We wait for it to COMPLETE before finalizing — finalizing early (at the
-// first ready listing) routinely produced zero results, because that one
-// listing was often filtered and the rest hadn't enriched yet. This is only a
-// last-resort escape hatch so a single hung straggler can't force a timeout:
-// once enrichment has run this long with at least one listing ready, finalize
-// with what we have.
-const ENRICH_MAX_WAIT_MS = 200_000
+// Enrichment is the slow phase (a Task per listing) and ripens gradually. With
+// a large match pool, waiting for EVERY candidate to enrich is what pushed a
+// full search to ~5 min. We now finalize once ENRICH_ENOUGH listings have
+// enriched rent (a full page's worth survives filtering), rather than waiting
+// for the whole batch — the tail candidates rarely change the shown results.
+// ENRICH_MAX_WAIT_MS remains a last-resort escape hatch for a hung straggler.
+const ENRICH_ENOUGH = 8
+const ENRICH_MAX_WAIT_MS = 120_000
 // FindAll only reports `completed` once it fills match_limit OR exhausts the
 // web. A rare/over-constrained query (e.g. "3BR penthouse under $2500") may
 // never fill the limit, so it never completes — the client would then poll to
 // MAX_POLLS and show a timeout error, discarding the candidates it DID find.
 // Once discovery has run this long with at least one match, proceed to
 // enrichment with what we have instead of waiting for `completed`.
-const DISCOVER_MAX_WAIT_MS = 120_000
+const DISCOVER_MAX_WAIT_MS = 60_000
+// Start enrichment as soon as discovery has this many verified matches, rather
+// than waiting for the full match_limit pool — the extra tail candidates mostly
+// don't change the shown page and just add latency.
+const DISCOVER_ENOUGH = 15
 // For a run that escaped discovery (never `completed`), we can't use the run
 // state to tell that enrichment finished. Instead finalize once enrichment has
 // settled — no newly-populated rent for this long — so we don't sit on the
 // full ENRICH_MAX_WAIT_MS for a small candidate set that's already done.
-const ENRICH_SETTLE_MS = 25_000
+const ENRICH_SETTLE_MS = 15_000
 // Discovery is run-to-run variable: a thin neighborhood occasionally returns a
 // junk-heavy candidate set and finalizes near-empty. Rather than give up, run
 // one fresh FindAll pass before showing the user (near-)nothing.
@@ -268,14 +272,17 @@ export function useSearch() {
             prevGenerated = poll.generated
             prevMatched = poll.matched
           }
-          // Proceed to enrichment when discovery completes, OR when it has run
-          // long enough with at least one match (a rare query may never fill
-          // match_limit and so never reports `completed` — don't hang on it).
+          // Proceed to enrichment when discovery completes, when it already has
+          // a healthy set of matches (no need to wait for the full pool to
+          // start extracting), OR when it has run long enough with at least one
+          // match (a rare query may never fill match_limit and never report
+          // `completed` — don't hang on it).
+          const discoverEnough = poll.matched >= DISCOVER_ENOUGH
           const discoverTimedOut =
             Date.now() - discoverStartedAt > DISCOVER_MAX_WAIT_MS && poll.matched >= 1
-          if (poll.state === "completed" || discoverTimedOut) {
-            if (discoverTimedOut && poll.state !== "completed") {
-              say(`\nDiscovery slow, proceeding with ${poll.matched} verified so far…\n`)
+          if (poll.state === "completed" || discoverEnough || discoverTimedOut) {
+            if (poll.state !== "completed") {
+              say(`\nProceeding with ${poll.matched} verified so far…\n`)
             } else {
               say(`\nVerified ${poll.matched}. Extracting listing details…\n`)
             }
@@ -308,6 +315,10 @@ export function useSearch() {
           prevReady = poll.rentPopulated
           lastReadyChangeAt = Date.now()
         }
+        // Enough enriched to show a full page: finalize without waiting for the
+        // long tail of the batch to enrich. The target scales down for a small
+        // match set (don't wait for 12 when only 8 matched).
+        const enrichEnough = poll.rentPopulated >= Math.min(poll.matched || poll.candidateCount || 1, ENRICH_ENOUGH)
         const enrichTimedOut = Date.now() - enrichStartedAt > ENRICH_MAX_WAIT_MS && poll.rentPopulated >= 1
         // A run that never `completed` won't ever report enrichment done via
         // state, so finalize once every candidate is populated OR enrichment
@@ -316,7 +327,7 @@ export function useSearch() {
         const enrichSettled = !discoverCompleted && poll.rentPopulated >= 1 &&
           (poll.rentPopulated >= poll.candidateCount ||
             Date.now() - lastReadyChangeAt > ENRICH_SETTLE_MS)
-        if (poll.state !== "completed" && !enrichTimedOut && !enrichSettled) continue
+        if (poll.state !== "completed" && !enrichEnough && !enrichTimedOut && !enrichSettled) continue
         if (poll.state !== "completed") {
           say(`\nFinalizing ${poll.rentPopulated} ready now.\n`)
         }
