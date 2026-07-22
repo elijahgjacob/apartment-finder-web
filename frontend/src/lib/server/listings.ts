@@ -158,6 +158,49 @@ export interface ParsedListing {
   score: number
 }
 
+// US state codes other than CA. This app targets California (SF / Bay Area);
+// an explicit non-CA state in a listing's address, name, or URL means the unit
+// is out of area (e.g. a "750 Greenwich St, New York, NY" that shares a street
+// name with SF and would otherwise geocode near the reference and slip in).
+const US_STATES_NON_CA = new Set([
+  "AL", "AK", "AZ", "AR", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN",
+  "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE",
+  "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+])
+
+function isOutOfCalifornia(address: string, name: string, url: string): boolean {
+  // Explicit ", XX" state code in the address or candidate name. If CA appears,
+  // it's in-state; only a non-CA code with no CA present is out of area.
+  const codes = [...`${address} , ${name}`.matchAll(/,\s*([A-Za-z]{2})\b/g)].map((m) => m[1].toUpperCase())
+  if (codes.includes("CA")) return false
+  if (codes.some((c) => US_STATES_NON_CA.has(c))) return true
+  // Geo-suffixed listing URL, e.g. ".../750-greenwich-st-new-york-ny/<id>/".
+  // Require a word before the two-letter token so a stray "-2b/" isn't read as
+  // a state; a real SF deep link ends "-san-francisco-ca/..." (CA → in-state).
+  const m = url.toLowerCase().match(/-[a-z]{3,}-([a-z]{2})(?:\/|$)/)
+  if (m) {
+    const st = m[1].toUpperCase()
+    if (st !== "CA" && US_STATES_NON_CA.has(st)) return true
+  }
+  return false
+}
+
+const WORD_NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 }
+
+// Best-effort bedroom count from free text (candidate name / description) when
+// enrichment didn't return one. Handles digits and spelled-out numbers, with or
+// without a hyphen ("2 bed", "1-bedroom", "two br", "studio"). Returns null when
+// the text names no count — we show "?" rather than invent a number.
+function parseBedsFromText(text: string): number | null {
+  if (/\bstudio\b/i.test(text)) return 0
+  const w = text.match(/\b(one|two|three|four|five|six)[\s-]*(?:bed(?:room)?s?|br|bd)\b/i)
+  if (w) return WORD_NUM[w[1].toLowerCase()]
+  const d = text.match(/\b(\d{1,2})[\s-]*(?:bed(?:room)?s?|br|bd)\b/i)
+  if (d) return parseInt(d[1], 10)
+  return null
+}
+
 function candidateToListing(
   candidate: Candidate,
   opts: ParseOptions = {},
@@ -186,6 +229,7 @@ function candidateToListing(
 
   const address = outputVal(output, "street_address") || addressFromName(name) || name
   if (!address || address.length < 5) return rej("no_address")
+  if (isOutOfCalifornia(address, name, url)) return rej("out_of_area")
 
   let price = parseIntLoose(outputVal(output, "monthly_rent_usd"))
   if (price == null) {
@@ -221,14 +265,7 @@ function candidateToListing(
     const m = nameAndDesc.match(/\$\s*([\d,]{3,})(?:\s*\/\s*mo(?:nth)?)?/i)
     if (m) price = parseIntLoose(m[1])
   }
-  if (beds == null) {
-    if (/\bstudio\b/i.test(nameAndDesc)) {
-      beds = 0
-    } else {
-      const m = nameAndDesc.match(/\b(\d{1,2})\s*(?:bed(?:room)?s?|br|bd)\b/i)
-      if (m) beds = parseInt(m[1], 10)
-    }
-  }
+  if (beds == null) beds = parseBedsFromText(nameAndDesc)
 
   if (price != null && (price < 500 || price > 50000)) price = null
   if (beds != null && (beds < 0 || beds > 10)) beds = null
@@ -360,6 +397,21 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
     Math.sin(dLat / 2) ** 2 +
     Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+// The Bay Area fits comfortably within ~120km of any of its city references
+// (SF to San Jose is ~75km). A geocoded listing farther than this from the
+// search's reference point is out of area (e.g. a same-state Los Angeles unit
+// that shares a street name), so drop it. A listing that failed to geocode has
+// null coords and is kept — absence of a location is not evidence it's far.
+export const REGION_MAX_KM = 150
+export function isFarFromReference(
+  lat: number | null,
+  lng: number | null,
+  opts: ParseOptions = {},
+): boolean {
+  if (opts.refLat == null || opts.refLng == null || lat == null || lng == null) return false
+  return haversineKm(lat, lng, opts.refLat, opts.refLng) > REGION_MAX_KM
 }
 
 // Equal-weight 3-factor score (recency + price fit + proximity), max 100.

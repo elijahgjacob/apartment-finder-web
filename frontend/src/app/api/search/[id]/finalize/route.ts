@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { findallResult } from "@/lib/server/parallel"
-import { parseCandidates, parseOptionsFrom, scoreListing } from "@/lib/server/listings"
+import { parseCandidates, parseOptionsFrom, scoreListing, isFarFromReference } from "@/lib/server/listings"
 import { geocodeAddress, geocodeNeighborhood } from "@/lib/server/geocode"
 import { neighborhoodCentroid } from "@/lib/bay-area"
 import { DEFAULT_BUDGET } from "@/lib/server/config"
@@ -73,9 +73,17 @@ export async function GET(
       l.score = scoreListing(l, budget, opts) // re-score with geo precision known
     }
 
+    // Drop listings that geocoded well outside the search's region (a same-state
+    // unit that shares a street name, so the address/URL guard didn't catch it).
+    // Failed-geocode listings have null coords and are kept.
+    const inRegion = listings.filter((l) => !isFarFromReference(l.lat, l.lng, opts))
+    if (inRegion.length !== listings.length) {
+      console.log(`[funnel] run=${id} dropped ${listings.length - inRegion.length} out-of-region`)
+    }
+
     // Flag untrusted-source listings for the client-driven Task API
     // secondary verification (same flags as the original spam check).
-    const withVerify = listings.map((l) => ({
+    const withVerify = inRegion.map((l) => ({
       ...l,
       needs_verification: !TRUSTED_SOURCES.has(l.source),
     }))
