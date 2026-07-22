@@ -44,12 +44,14 @@ function matchConditions(minBeds: number | null, budget: number, city: string) {
     {
       name: "is_rental_listing",
       description:
-        `The page is an individual rental property listing in or near ${city}. ` +
-        "It advertises a specific unit available to rent. " +
-        "Not a search results page, not a news article, not a category index." +
+        `The page is one individual rental unit's own listing page in or near ${city}, ` +
+        "reachable at its own URL and showing a specific street address. " +
+        "Reject search-results pages, neighborhood or price category/index pages, " +
+        "pages that list many different properties, directory or map pages, and " +
+        "news articles." +
         blockedClause +
-        " If the page describes a real property in the target area " +
-        "(and is not on a blocked domain), mark this matched.",
+        " Mark matched only for a single specific unit's listing on a non-blocked " +
+        "domain; if the page is a search, category, or multi-property list, mark it not matched.",
     },
     {
       name: "fits_budget",
@@ -230,6 +232,9 @@ export async function findallCreate(opts: {
     objective += `. Search the web broadly, and be sure to include listings from these websites: ${opts.sources.join(", ")}`
   }
   if (opts.requirements) objective += `. Requirements: ${opts.requirements}`
+  // Steer the generator toward real inventory: individual unit pages, not the
+  // search/category index pages that otherwise fill most of the verified slots.
+  objective += ". Return individual rental listing pages, each with its own URL and street address; do not return search-results, category, or neighborhood index pages."
 
   const data = await parallelFetch("/v1beta/findall/runs", {
     method: "POST",
