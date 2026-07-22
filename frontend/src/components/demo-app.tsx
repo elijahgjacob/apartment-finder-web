@@ -312,6 +312,11 @@ function DemoAppInner({ config }: { config: AppConfig }) {
   )
   const autoShowAll = !streaming && strongFitCount === 0
   const effectiveShowAll = showAllScores || autoShowAll
+  // When nothing clears the strong-fit bar, revealing stale listings too keeps
+  // us from rendering an empty page while real (if older) aggregator listings
+  // sit hidden. They still carry the "stale?" badge. Spam stays hidden: it's a
+  // safety signal, not a freshness one.
+  const effectiveShowStale = showStale || autoShowAll
 
   const filteredListings = useMemo(() => {
     return sortedListings.filter((l) => {
@@ -319,19 +324,19 @@ function DemoAppInner({ config }: { config: AppConfig }) {
       // provisional scores lack proximity/price points until finalize, so the
       // strong-fit bar only applies once the run completes.
       if (!streaming && !effectiveShowAll && (l.score ?? 0) < STRONG_FIT_THRESHOLD) return false
-      if (!showStale && isStale(l)) return false
+      if (!effectiveShowStale && isStale(l)) return false
       if (!showSpam && isSpam(l)) return false
       return true
     })
-  }, [sortedListings, streaming, effectiveShowAll, showStale, showSpam, isStale, isSpam])
+  }, [sortedListings, streaming, effectiveShowAll, effectiveShowStale, showSpam, isStale, isSpam])
 
   const hiddenLowScoreCount = useMemo(
     () => (streaming || effectiveShowAll) ? 0 : sortedListings.filter((l) => (l.score ?? 0) < STRONG_FIT_THRESHOLD && (showStale || !isStale(l)) && (showSpam || !isSpam(l))).length,
     [sortedListings, streaming, effectiveShowAll, showStale, showSpam, isStale, isSpam],
   )
   const hiddenStaleCount = useMemo(
-    () => sortedListings.filter((l) => isStale(l) && (effectiveShowAll || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
-    [sortedListings, effectiveShowAll, isStale],
+    () => effectiveShowStale ? 0 : sortedListings.filter((l) => isStale(l) && (effectiveShowAll || (l.score ?? 0) >= STRONG_FIT_THRESHOLD)).length,
+    [sortedListings, effectiveShowStale, effectiveShowAll, isStale],
   )
   const hiddenSpamCount = useMemo(
     () => sortedListings.filter((l) => isSpam(l)).length,
