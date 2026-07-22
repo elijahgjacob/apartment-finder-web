@@ -82,11 +82,15 @@ export const STALE_DIRECT_DAYS = envNum("STALE_DIRECT_DAYS", 45)
 // - Enrichment defaults to "base" here (see the note below). A higher tier
 //   extracts pages more reliably at the cost of latency; raise it only if blank
 //   price/beds listings are getting filtered out and hurting recall.
-// - match_limit is set above the number we expect to show, because some
-//   candidates are dropped downstream (blocked hosts, category/index pages,
-//   duplicates). The extra headroom means more usable listings per search.
+// - match_limit is set well above the number we expect to show. Funnel logs
+//   show only ~15-20% of verified candidates survive parsing — the rest are
+//   category/index pages, url-less entries, blocked hosts, or duplicates — so a
+//   limit of ~25 yields a handful of real listings where 10 yielded ~2. Recall
+//   scales with the pool (a run that verified 16 kept 6; runs that verified 10
+//   kept 2). The cost is more enrichment Tasks per search; the client caps how
+//   long it waits, so the extra shows up as token cost, not proportional latency.
 export const FINDALL_GENERATOR = envStr("FINDALL_GENERATOR", "base")
-export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 10)
+export const FINDALL_MATCH_LIMIT = envNum("FINDALL_MATCH_LIMIT", 25)
 // NOTE: production has always run "base" here (the env var is unset on Vercel
 // and the old code read the env directly with a "base" fallback, ignoring this
 // constant's former "core" default). Kept at "base" so cleanup changes no
