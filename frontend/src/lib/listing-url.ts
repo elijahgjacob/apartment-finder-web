@@ -34,6 +34,18 @@ const SEARCH_PAGE_PATTERNS: RegExp[] = [
   // map of all listings). Individual units add /{street-slug}/{numeric-id}
   // beyond the city, so those deeper paths are NOT matched here.
   /\/places-for-rent(?:\/[a-z]{2}(?:\/[a-z0-9-]+)?)?\/?(?:[?#]|$)/i,
+  // Facet / filter path segments. These are range/filter controls that only
+  // appear on search-results pages, never on an individual unit. Scoped to the
+  // range forms (min-max, price-band) so a unit slug like "2-beds-1-bath" or
+  // "half-price-special" is NOT caught.
+  /\/price-(?:na|\d+)-/i,                 // realtor: /price-na-800, /price-1000-3000
+  /\d+k-price(?:[/?#]|$)/i,               // compass: /5k-price
+  /[/-]beds-\d+-\d+/i,                    // realtor: /beds-2-2 (min-max facet)
+  /[/-]from-\d{3,}(?:[/?#]|$)/i,          // apartmenthomeliving: /from-5000
+  // apartments.com city index (/san-francisco-ca). Real apartments.com deep
+  // links always carry a digit-led street address or a trailing id segment, so
+  // a single all-lowercase-hyphen segment that ends the path is an index page.
+  /apartments\.com\/[a-z-]+\/?(?:[?#]|$)/i,
 ]
 
 // Aggregator hosts we never link to even if a URL looks listing-shaped —
