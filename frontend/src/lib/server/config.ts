@@ -46,12 +46,27 @@ export const APP_TITLE = envStr("APP_TITLE", "Bay Area Apartment Finder")
 export const BRAND_NAME = envStr("BRAND_NAME", "Apartment Finder")
 export const BRAND_LOGO_URL = envStr("BRAND_LOGO_URL", "/app-logo.svg")
 
+// Starter queries. Each was measured against real discovery runs before being
+// listed here, because a chip that finalizes to an empty grid is the worst
+// thing on the page. Two failure modes to avoid when editing:
+//   - Budget at the entry-level floor. `fits_budget` is a hard FindAll match
+//     condition, so pricing a chip at its RENT_FLOORS value verifies almost
+//     nothing ("Studio in Palo Alto under $2,600" finalized to zero listings).
+//     Aim ~1.25-1.4x the floor for that city and bedroom count.
+//   - Thin inventory. Boutique neighborhoods and the smaller Peninsula/South
+//     Bay cities verify candidates that are mostly category and index pages,
+//     which the listing parser drops — the run ends with matches but no cards.
+//     Dense cities and large neighborhoods hold up run to run.
+// Spell any neighborhood exactly as lib/bay-area.ts has it so it parses to a
+// 📍 chip ("UC Berkeley" does not, which is why the old chip showed none), and
+// leave square footage out — it constrains discovery and slows the run.
+// Last measured 2026-08-19 (parsed-candidate average over 2-4 discovery runs
+// each): Mission Bay 1BR 5.0, Mission 2BR 4.5, Hayes Valley 1BR 3.5.
 export const SUGGESTIONS = envStr(
   "SEARCH_SUGGESTIONS",
-  "2 bedroom in the Mission under $4,600|" +
-  "1 bedroom near UC Berkeley under $3,000|" +
-  "Studio in Palo Alto under $2,600|" +
-  "2 bed 1,000 sq ft in Oakland under $3,500",
+  "1 bedroom in Mission Bay under $5,000|" +
+  "2 bedroom in the Mission under $7,000|" +
+  "1 bedroom in Hayes Valley under $4,400",
 ).split("|").map((s) => s.trim()).filter(Boolean)
 
 // Typical monthly-rent floors by bedroom count for the default city (SF).
