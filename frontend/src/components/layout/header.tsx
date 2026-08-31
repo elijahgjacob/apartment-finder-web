@@ -35,7 +35,9 @@ export function Header({ config }: HeaderProps) {
           )}
         </div>
         <a
-          href="/docs"
+          href="https://parallel.ai/blog/apartment-finder"
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors hover:brightness-95 whitespace-nowrap shrink-0"
           style={{ color: Z.blueDark, backgroundColor: Z.blueSoft, border: `1px solid ${Z.blueBorder}` }}
         >
