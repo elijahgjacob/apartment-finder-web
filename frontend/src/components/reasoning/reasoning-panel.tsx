@@ -22,7 +22,7 @@ const PHASE_STEP_INDEX: Record<SearchPhase["key"], number> = {
   done: 4,
 }
 
-type Progress = { generated: number; matched: number; ready: number; total: number }
+type Progress = { generated: number; matched: number; ready: number; total: number; dropped?: number }
 
 function buildSteps(
   phase: SearchPhase | null,
@@ -61,8 +61,17 @@ function buildSteps(
   }
 
   // Discover: live candidate/verified counts as FindAll streams them.
+  // FindAll's matched count outruns the cards on screen whenever the parser
+  // rejects a match as unusable (a category page, no street address, a price
+  // that is really an address, a duplicate). Naming that third number is what
+  // makes the funnel add up instead of looking like a miscount.
+  const dropped = progress.dropped ?? 0
   steps[1].subtitle = progress.generated > 0
-    ? `${progress.generated} listing${progress.generated === 1 ? "" : "s"} found · ${progress.matched} match your criteria`
+    ? [
+        `${progress.generated} listing${progress.generated === 1 ? "" : "s"} found`,
+        `${progress.matched} match your criteria`,
+        ...(dropped > 0 ? [`${dropped} not usable listing page${dropped === 1 ? "" : "s"}`] : []),
+      ].join(" · ")
     : "Scanning listing sites across the web"
 
   // Extract: enrichment ripens gradually; show ready/total + a real fill bar.

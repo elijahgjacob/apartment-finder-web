@@ -23,7 +23,14 @@ export async function GET(
       findallStatus(id),
       findallResult(id).catch(() => []),
     ])
-    const listings = parseCandidates(candidates, minBeds, budget, parseOptionsFrom(sp))
+    // FindAll marks a candidate matched; the parser then rejects the ones that
+    // are not usable individual listings (category/index pages, no street
+    // address, blocked host, duplicate address). Those rejections are why the
+    // panel's "N match your criteria" can outrun the number of cards on screen,
+    // so report the count instead of discarding it.
+    const drops: Record<string, number> = {}
+    const listings = parseCandidates(candidates, minBeds, budget, parseOptionsFrom(sp), drops)
+    const dropped = Object.values(drops).reduce((a, b) => a + b, 0)
     // How many candidates have enriched rent values — lets the client tell
     // "discovery done" apart from "enrichment done" (both report completed).
     const rentPopulated = candidates.filter((c) => {
@@ -36,6 +43,7 @@ export async function GET(
       matched: status.matched,
       rentPopulated,
       candidateCount: candidates.length,
+      dropped,
       listings,
     })
   } catch (e) {
