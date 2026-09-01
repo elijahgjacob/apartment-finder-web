@@ -473,6 +473,7 @@ function DemoAppInner({ config }: { config: AppConfig }) {
       <main className={`max-w-6xl mx-auto px-6 ${hasActivity ? "pt-3 pb-8" : "py-8"}`}>
         {error && (
           <div
+            data-testid="search-error"
             className="rounded-xl p-4 mb-6 text-sm font-medium"
             style={{ backgroundColor: Z.redSoft, border: `1px solid #F4B5B5`, color: Z.red }}
           >
