@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { findallCreate } from "@/lib/server/parallel"
+import { findallCreate, findallEnrich } from "@/lib/server/parallel"
 import { bedroomBounds } from "@/lib/server/listings"
 import { DEFAULT_BUDGET, BLOCKED_DOMAINS } from "@/lib/server/config"
 import { sanitizeDomain } from "@/lib/sources"
@@ -46,7 +46,21 @@ export async function POST(req: NextRequest) {
       sources: sources?.length ? sources : null,
       minBeds,
     })
-    return NextResponse.json({ runId: findallId, objective, minBeds, maxBeds, budget, sources })
+    // Attach the enrichment schema right away. Enrichments run on every match,
+    // present and future (FindAll docs, "Adding Enrichments"), so registering
+    // it here lets extraction Tasks fire as each candidate verifies instead of
+    // queueing behind the whole discovery phase. Enrichment only ever touches
+    // matched candidates, so this costs nothing extra — it just removes
+    // discovery from the extraction critical path.
+    // Best-effort: a failure here is recoverable because the client re-POSTs
+    // /enrich when discovery finishes.
+    let enriched = true
+    try {
+      await findallEnrich(findallId)
+    } catch {
+      enriched = false
+    }
+    return NextResponse.json({ runId: findallId, objective, minBeds, maxBeds, budget, sources, enriched })
   } catch (e) {
     return NextResponse.json(
       { detail: e instanceof Error ? e.message : "FindAll create failed" }, { status: 502 },
