@@ -204,6 +204,55 @@ export interface FindAllCreateResult {
   objective: string
 }
 
+// Words that carry no search intent on their own. A residue made only of these
+// is nothing worth sending.
+const QUERY_FILLER = new Set([
+  "a", "an", "the", "and", "or", "in", "on", "at", "for", "of", "to", "with",
+  "by", "find", "show", "me", "please", "looking", "want", "need", "apartment",
+  "apartments", "apt", "apts", "condo", "condos", "place", "places", "unit",
+  "units", "rent", "rental", "rentals", "listing", "listings", "per", "month",
+  "monthly", "mo", "under", "below", "max", "budget", "around", "that", "is",
+])
+
+// Beds, budget, city and neighborhoods are all parsed out of the free-text
+// query before it reaches findallCreate, and each one is already stated in the
+// objective. Appending the query verbatim therefore says everything twice:
+//
+//   Find 1 bedroom apartments for rent under 5000 dollars per month in San
+//   Francisco, CA. 1 bedroom in Mission Bay under $5,000. Prioritize listings
+//   in these neighborhoods: Mission, Mission Bay.
+//
+// So subtract what the objective already says and keep only the residue — the
+// part the structured fields do not model, like "parking, in-unit laundry".
+// A query that is fully covered leaves nothing and is dropped.
+function queryResidue(query: string, known: (string | null | undefined)[]): string {
+  let s = ` ${query} `
+  // Longest first, so "Mission Bay" is removed before "Mission" can strand "Bay".
+  const names = known
+    .map((n) => n?.trim() ?? "")
+    .filter((n) => n.length >= 3)
+    .sort((a, b) => b.length - a.length)
+  for (const n of names) {
+    s = s.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), " ")
+  }
+  s = s
+    .replace(/\$\s?[\d,.]+\s*k?\b/gi, " ")                            // $5,000 / $5k
+    .replace(/\b[\d,.]+\s*k\b/gi, " ")                                 // 5k
+    .replace(/\b\d[\d,.]*\s*\+?\s*(?:bd|br|beds?|bedrooms?)\b/gi, " ")  // 1br / 2 bedrooms
+    .replace(/\bstudios?\b/gi, " ")
+    .replace(/\b\d[\d,.]*\s*(?:dollars?|usd)?\b/gi, " ")               // bare budget/bed numbers
+    .replace(/\s+/g, " ")
+  // Trim filler and punctuation off both ends; interior words stay, so
+  // "parking, in-unit laundry" keeps its commas and "near Caltrain" its "near".
+  const words = s.split(" ").filter(Boolean)
+  const isFiller = (w: string) =>
+    QUERY_FILLER.has(w.toLowerCase().replace(/[^a-z0-9'\u2019-]/g, ""))
+  while (words.length && isFiller(words[0])) words.shift()
+  while (words.length && isFiller(words[words.length - 1])) words.pop()
+  if (!words.some((w) => !isFiller(w))) return ""
+  return words.join(" ").replace(/^[\s,;.-]+|[\s,;.-]+$/g, "")
+}
+
 export async function findallCreate(opts: {
   query: string
   budget: number
@@ -222,16 +271,17 @@ export async function findallCreate(opts: {
   let objective =
     `Find ${bedsStr}apartments for rent ` +
     `under ${opts.budget} dollars per month in ${city}`
-  if (opts.query && !opts.query.toLowerCase().includes(city.toLowerCase())) {
-    objective += `. ${opts.query}`
-  }
+  // Whatever the free-text query says beyond the structured fields, plus the
+  // explicit requirements field, become one Requirements clause.
+  const residue = queryResidue(opts.query ?? "", [city, city.split(",")[0], ...(opts.neighborhoods ?? [])])
   if (opts.neighborhoods?.length) {
-    objective += `. Prioritize listings in these ${city} neighborhoods: ${opts.neighborhoods.join(", ")}`
+    objective += `. Prioritize listings in these neighborhoods: ${opts.neighborhoods.join(", ")}`
   }
   if (opts.sources?.length) {
     objective += `. Search the web broadly, and be sure to include listings from these websites: ${opts.sources.join(", ")}`
   }
-  if (opts.requirements) objective += `. Requirements: ${opts.requirements}`
+  const requirements = [residue, opts.requirements?.trim()].filter(Boolean).join("; ")
+  if (requirements) objective += `. Requirements: ${requirements}`
   // Steer the generator toward real inventory: individual unit pages, not the
   // search/category index pages that otherwise fill most of the verified slots.
   objective += ". Return individual rental listing pages, each with its own URL and street address; do not return search-results, category, or neighborhood index pages."

@@ -12,6 +12,7 @@ type PollResponse = {
   matched: number
   rentPopulated: number
   candidateCount: number
+  dropped?: number
   listings: Listing[]
 }
 
@@ -154,7 +155,7 @@ export function useSearch() {
   const [startedAt, setStartedAt] = useState<number | null>(null)
   // Live run metrics for the discovery visualization: candidates generated,
   // verified matches, enriched-and-ready, and total candidates.
-  const [progress, setProgress] = useState({ generated: 0, matched: 0, ready: 0, total: 0 })
+  const [progress, setProgress] = useState({ generated: 0, matched: 0, ready: 0, total: 0, dropped: 0 })
   const [fraudChecking, setFraudChecking] = useState(false)
   // Bumped on every new search and on unmount so an abandoned loop exits.
   const genRef = useRef(0)
@@ -179,7 +180,7 @@ export function useSearch() {
     setStreaming(true)
     setPhase({ key: "discover", detail: "Starting…" })
     setStartedAt(Date.now())
-    setProgress({ generated: 0, matched: 0, ready: 0, total: 0 })
+    setProgress({ generated: 0, matched: 0, ready: 0, total: 0, dropped: 0 })
 
     const say = (text: string) => { if (live()) setReasoning((p) => p + text) }
     const fail = (msg: string) => {
@@ -237,6 +238,7 @@ export function useSearch() {
       let prevGenerated = -1
       let prevMatched = -1
       let prevReady = -1
+      let prevTotal = 0
       let discoverCompleted = false
       let lastReadyChangeAt = 0
       let pollFails = 0
@@ -337,6 +339,7 @@ export function useSearch() {
           matched: poll.matched,
           ready: poll.rentPopulated,
           total: poll.candidateCount,
+          dropped: poll.dropped ?? 0,
         })
 
         if (!enrichStarted) {
@@ -397,11 +400,20 @@ export function useSearch() {
         // listing yielded zero results). The time-based escape hatch only
         // fires if enrichment drags on with a hung straggler.
         const total = poll.candidateCount || 1
-        if (poll.rentPopulated !== prevReady) {
-          say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
+        // The banner shows ready/total, so it has to be rewritten when EITHER
+        // number moves. Gating it on `rentPopulated` alone froze the
+        // denominator at whatever the candidate pool held on the last poll
+        // that ripened a listing: a run sitting at 0 ready kept showing the
+        // first poll's "0/1" while the pool grew to 4, contradicting the
+        // reasoning panel, which reads the live count.
+        if (poll.rentPopulated !== prevReady || total !== prevTotal) {
+          if (poll.rentPopulated !== prevReady) {
+            say(`Extracting details… ${poll.rentPopulated}/${total} ready\n`)
+            lastReadyChangeAt = Date.now()
+          }
           setPhase({ key: "extract", detail: `Extracting details · ${poll.rentPopulated}/${total} ready` })
           prevReady = poll.rentPopulated
-          lastReadyChangeAt = Date.now()
+          prevTotal = total
         }
         // Enough enriched to show a full page: finalize without waiting for the
         // long tail of the batch to enrich. The target scales down for a small
